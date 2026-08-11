@@ -1,0 +1,128 @@
+@import 'tailwindcss';
+@plugin '@tailwindcss/forms';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+@theme {
+    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-display: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+    /* Ink — bleu marine profond du logo DISMAT (sidebar, panneau de marque) */
+    --color-ink-950: #041022;
+    --color-ink-900: #071b3d;
+    --color-ink-800: #0d2a5c;
+    --color-ink-700: #123a78;
+    --color-ink-600: #1b4e96;
+
+    /* Brand — bleu vif du logo DISMAT (actions primaires, accents, focus) */
+    --color-brand-50: #eaf6ff;
+    --color-brand-100: #d3ecff;
+    --color-brand-200: #a8dbff;
+    --color-brand-300: #6fc5ff;
+    --color-brand-400: #2db3ff;
+    --color-brand-500: #0ea5ea;
+    --color-brand-600: #0b84c4;
+    --color-brand-700: #0a6699;
+    --color-brand-800: #0b4a72;
+    --color-brand-900: #01225a;
+}
+
+@layer base {
+    body {
+        background-color: #f4f6f9;
+    }
+
+    ::selection {
+        background-color: var(--color-brand-200);
+        color: var(--color-ink-950);
+    }
+}
+
+@layer components {
+    /* Champs de formulaire : bordure, ombre et halo de focus cohérents partout */
+    .field {
+        @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800
+               shadow-sm transition placeholder:text-slate-400
+               focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 focus:outline-none;
+    }
+
+    .btn-primary {
+        @apply inline-flex items-center justify-center gap-2 rounded-lg bg-ink-950 px-4 py-2.5
+               text-sm font-medium text-white shadow-sm transition
+               hover:bg-ink-900 hover:shadow-md active:scale-[0.98];
+    }
+
+    .btn-secondary {
+        @apply inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white
+               px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition
+               hover:bg-slate-50 hover:border-slate-400 active:scale-[0.98];
+    }
+
+    .btn-link {
+        @apply font-medium text-brand-700 transition hover:text-brand-800 hover:underline;
+    }
+
+    .card {
+        @apply rounded-xl border border-slate-200 bg-white shadow-sm transition;
+    }
+
+    .card-hover {
+        @apply hover:shadow-md hover:-translate-y-0.5;
+    }
+
+    .badge {
+        @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+    }
+
+    .table-modern thead th {
+        @apply bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500;
+    }
+
+    .table-modern tbody tr {
+        @apply transition hover:bg-brand-50/40;
+    }
+
+    .table-modern tbody td {
+        @apply px-4 py-3 text-sm;
+    }
+
+    .modal-panel {
+        @apply w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl;
+    }
+}
+
+.font-display {
+    font-family: var(--font-display);
+}
+
+[x-cloak] {
+    display: none !important;
+}
+
+@keyframes modal-in {
+    from { opacity: 0; transform: scale(0.96) translateY(4px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.modal-enter {
+    animation: modal-in 0.16s ease-out;
+}
+
+@keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+.backdrop-enter {
+    animation: fade-in 0.16s ease-out;
+}
+
+/* Motif "plan technique" utilisé sur le panneau de marque de la page de connexion */
+.blueprint-grid {
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+    background-size: 32px 32px;
+}
