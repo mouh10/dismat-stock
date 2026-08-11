@@ -38,13 +38,13 @@ class DatabaseSeeder extends Seeder
             'tenant_id' => $tenant->id,
             'magasin_id' => $magasin->id,
             'nom' => 'Admin',                     // <- Ton nom
-            'email' => 'admin@dismat.sn',          // <- Ton email de connexion
-            'password' => Hash::make('changeme123'), // <- Ton mot de passe (à changer !)
+            'email' => 'mouhamed@dismat.sn',          // <- Ton email de connexion
+            'password' => Hash::make('Rassoul@2025'), // <- Ton mot de passe (à changer !)
             'role' => 'admin',
             'actif' => true,
         ]);
 
-        $this->command->info('Compte créé : admin@dismat.sn / changeme123');
-        $this->command->warn('Pense à changer ces identifiants (email + mot de passe) dans ce fichier avant de lancer le seeder, ou depuis Équipe une fois connecté.');
+        //$this->command->info('Compte créé : admin@dismat.sn / changeme123');
+        //$this->command->warn('Pense à changer ces identifiants (email + mot de passe) dans ce fichier avant de lancer le seeder, ou depuis Équipe une fois connecté.');
     }
 }

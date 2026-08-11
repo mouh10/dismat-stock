@@ -19,6 +19,8 @@ class Index extends Component
     public string $search = '';
     #[Url(as: 'categorie')]
     public string $filterCategory = '';
+    #[Url(as: 'magasin')]
+    public string $filterMagasin = ''; // uniquement utilisable par un admin
     #[Url(as: 'statut')]
     public string $filterStatut = 'actifs'; // actifs | inactifs | tous
     #[Url(as: 'stock')]
@@ -31,6 +33,7 @@ class Index extends Component
     public string $designation = '';
     public string $sku = '';
     public ?int $category_id = null;
+    public ?int $magasin_id = null;
     public string $marque = '';
     public string $description = '';
     public float $prix_achat = 0;
@@ -69,6 +72,7 @@ class Index extends Component
             'designation' => 'required|string|max:255',
             'sku' => 'nullable|string|max:100',
             'category_id' => 'nullable|exists:categories,id',
+            'magasin_id' => 'required|exists:magasins,id',
             'marque' => 'nullable|string|max:100',
             'description' => 'nullable|string',
             'prix_achat' => 'required|numeric|min:0',
@@ -86,12 +90,13 @@ class Index extends Component
 
     public function updatingSearch() { $this->resetPage(); }
     public function updatingFilterCategory() { $this->resetPage(); }
+    public function updatingFilterMagasin() { $this->resetPage(); }
     public function updatingFilterStatut() { $this->resetPage(); }
     public function updatingFilterStock() { $this->resetPage(); }
 
     public function resetFilters()
     {
-        $this->reset(['search', 'filterCategory', 'filterStock']);
+        $this->reset(['search', 'filterCategory', 'filterMagasin', 'filterStock']);
         $this->filterStatut = 'actifs';
         $this->resetPage();
     }
@@ -106,6 +111,8 @@ class Index extends Component
         $this->type_produit = 'neuf';
         $this->actif = true;
         $this->est_stockable = true;
+        // Un non-admin crée toujours un produit pour son propre magasin.
+        $this->magasin_id = auth()->user()->hasFullAccess() ? null : auth()->user()->magasin_id;
         $this->showModal = true;
     }
 
@@ -118,10 +125,18 @@ class Index extends Component
     public function edit(int $id)
     {
         $p = Produit::findOrFail($id);
+
+        // Un non-admin ne peut modifier que les produits de son propre magasin.
+        if (! auth()->user()->hasFullAccess() && $p->magasin_id !== auth()->user()->magasin_id) {
+            session()->flash('error', "Ce produit appartient à un autre magasin.");
+            return;
+        }
+
         $this->editingId = $p->id;
         $this->designation = $p->designation;
         $this->sku = (string) $p->sku;
         $this->category_id = $p->category_id;
+        $this->magasin_id = $p->magasin_id;
         $this->marque = (string) $p->marque;
         $this->description = (string) $p->description;
         $this->prix_achat = (float) $p->prix_achat;
@@ -139,6 +154,23 @@ class Index extends Component
 
     public function save()
     {
+        // Un non-admin ne peut jamais assigner un produit à un autre magasin que le sien,
+        // même en manipulant la requête.
+        if (! auth()->user()->hasFullAccess()) {
+            $this->magasin_id = auth()->user()->magasin_id;
+
+            // Vérification supplémentaire : impossible de modifier un produit d'un autre magasin
+            // même en trafiquant directement l'identifiant sans passer par edit().
+            if ($this->editingId) {
+                $cible = Produit::find($this->editingId);
+                if (! $cible || $cible->magasin_id !== auth()->user()->magasin_id) {
+                    session()->flash('error', "Action non autorisée : ce produit appartient à un autre magasin.");
+                    $this->showModal = false;
+                    return;
+                }
+            }
+        }
+
         $data = $this->validate();
         unset($data['stock_initial']);
 
@@ -150,14 +182,11 @@ class Index extends Component
                 $produit = Produit::create($data);
 
                 if ($this->stock_initial > 0) {
-                    $magasin = Magasin::where('est_principal', true)->first() ?? Magasin::first();
-                    if ($magasin) {
-                        Stock::create([
-                            'produit_id' => $produit->id,
-                            'magasin_id' => $magasin->id,
-                            'quantite' => $this->stock_initial,
-                        ]);
-                    }
+                    Stock::create([
+                        'produit_id' => $produit->id,
+                        'magasin_id' => $data['magasin_id'],
+                        'quantite' => $this->stock_initial,
+                    ]);
                 }
                 session()->flash('success', 'Produit créé.');
             }
@@ -169,6 +198,11 @@ class Index extends Component
 
     public function confirmDelete(int $id)
     {
+        $p = Produit::findOrFail($id);
+        if (! auth()->user()->hasFullAccess() && $p->magasin_id !== auth()->user()->magasin_id) {
+            session()->flash('error', "Ce produit appartient à un autre magasin.");
+            return;
+        }
         $this->confirmingDeleteId = $id;
     }
 
@@ -189,8 +223,15 @@ class Index extends Component
 
     public function render()
     {
-        $produits = Produit::with('category')
+        $user = auth()->user();
+        $ownMagasinId = $user->hasFullAccess() ? null : $user->magasin_id;
+
+        $produits = Produit::with(['category', 'magasin'])
             ->withSum('stocks as stock_total', 'quantite')
+            // Non-admin : uniquement les produits de son propre magasin, sans exception.
+            ->when($ownMagasinId, fn ($q) => $q->where('magasin_id', $ownMagasinId))
+            // Admin : peut filtrer par magasin via le sélecteur, ou tout voir.
+            ->when(! $ownMagasinId && $this->filterMagasin, fn ($q) => $q->where('magasin_id', $this->filterMagasin))
             ->when($this->search, fn ($q) => $q->where(function ($q2) {
                 $q2->where('designation', 'ilike', "%{$this->search}%")
                    ->orWhere('code_barres', 'ilike', "%{$this->search}%")
@@ -205,14 +246,23 @@ class Index extends Component
             ->paginate(10);
 
         $categories = Category::orderBy('nom')->get();
+        $magasins = Magasin::orderBy('nom')->get();
 
-        $nbProduitsTotal = Produit::count();
+        $nbProduitsTotal = Produit::when($ownMagasinId, fn ($q) => $q->where('magasin_id', $ownMagasinId))->count();
         $valeurStock = (float) DB::table('stocks')
             ->join('produits', 'produits.id', '=', 'stocks.produit_id')
+            ->when($ownMagasinId, fn ($q) => $q->where('produits.magasin_id', $ownMagasinId))
             ->selectRaw('COALESCE(SUM(stocks.quantite * produits.prix_achat), 0) as total')
             ->value('total');
 
-        return view('livewire.produits.index', compact('produits', 'categories', 'nbProduitsTotal', 'valeurStock'))
-            ->layout('layouts.app', ['title' => 'Produits']);
+        $subtitle = "{$nbProduitsTotal} produit(s)";
+        if ($ownMagasinId) {
+            $subtitle .= " <span class='text-slate-400'>(" . ($user->magasin?->nom ?? 'votre magasin') . ' uniquement)</span>';
+        }
+        $subtitle .= " - <span class='text-emerald-600 font-semibold'>" . number_format($valeurStock, 0, ',', ' ') . ' F CFA</span> en stock';
+
+        return view('livewire.produits.index', compact(
+            'produits', 'categories', 'magasins', 'nbProduitsTotal', 'valeurStock', 'ownMagasinId', 'subtitle'
+        ))->layout('layouts.app', ['title' => 'Produits']);
     }
 }

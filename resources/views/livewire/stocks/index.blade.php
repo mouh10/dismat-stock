@@ -1,5 +1,6 @@
 <div class="space-y-4">
-    <x-page-header title="Gestion des Stocks" subtitle="Suivez et gérez vos stocks en temps réel" />
+    <x-page-header title="Gestion des Stocks"
+        subtitle="{{ $magasinLocked ? 'Stock de votre magasin uniquement' : 'Suivez et gérez vos stocks en temps réel' }}" />
 
     @if (session('success'))
         <div class="p-3 rounded-lg bg-emerald-50 text-emerald-700 text-sm">{{ session('success') }}</div>
@@ -59,11 +60,18 @@
             <input type="text" wire:model.live.debounce.300ms="search" placeholder="Rechercher un produit..." class="field pl-9">
         </div>
 
-        <select wire:model.live="magasin_id" class="field sm:w-52">
-            @foreach ($magasins as $m)
-                <option value="{{ $m->id }}">{{ $m->nom }}</option>
-            @endforeach
-        </select>
+        @if ($magasinLocked)
+            <span class="flex items-center gap-2 px-3.5 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-600 shrink-0">
+                <x-icon name="store" class="w-4 h-4 text-slate-400" />
+                {{ $magasins->firstWhere('id', $magasin_id)?->nom ?? 'Votre magasin' }}
+            </span>
+        @else
+            <select wire:model.live="magasin_id" class="field sm:w-52">
+                @foreach ($magasins as $m)
+                    <option value="{{ $m->id }}">{{ $m->nom }}</option>
+                @endforeach
+            </select>
+        @endif
 
         <button wire:click="$set('filterStockBas', {{ $filterStockBas ? 'false' : 'true' }})"
                 class="flex items-center gap-2 px-3.5 py-2 rounded-lg border text-sm font-medium transition shrink-0

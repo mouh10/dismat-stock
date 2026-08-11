@@ -82,15 +82,18 @@ class Dashboard extends Component
             ->take(5)
             ->get();
 
-        // Alertes stock bas : données partagées de la boutique
+        // Alertes stock bas : pour un non-admin, cantonné à son magasin
+        $magasinId = $mesVentes ? auth()->user()->magasin_id : null;
+
         $produitsEnAlerte = Produit::where('est_stockable', true)
             ->where('actif', true)
-            ->withSum('stocks as stock_total', 'quantite')
+            ->when($magasinId, fn ($q) => $q->where('magasin_id', $magasinId))
+            ->withSum(['stocks as stock_total' => fn ($q) => $q->when($magasinId, fn ($q2) => $q2->where('magasin_id', $magasinId))], 'quantite')
             ->get()
             ->filter(fn ($p) => (float) ($p->stock_total ?? 0) <= $p->stock_min)
             ->take(5);
 
-        $nbProduits = Produit::where('actif', true)->count();
+        $nbProduits = Produit::where('actif', true)->when($magasinId, fn ($q) => $q->where('magasin_id', $magasinId))->count();
 
         $margeJour = (float) FactureItem::join('factures', 'factures.id', '=', 'facture_items.facture_id')
             ->join('produits', 'produits.id', '=', 'facture_items.product_id')

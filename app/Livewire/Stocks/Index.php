@@ -21,6 +21,7 @@ class Index extends Component
 
     public string $search = '';
     public ?int $magasin_id = null;
+    public bool $magasinLocked = false;
     public bool $filterStockBas = false;
 
     public bool $showAdjustModal = false;
@@ -31,12 +32,31 @@ class Index extends Component
 
     public function mount()
     {
-        $this->magasin_id = Magasin::where('est_principal', true)->value('id') ?? Magasin::value('id');
+        $user = auth()->user();
+
+        if ($user->hasFullAccess()) {
+            $this->magasin_id = Magasin::where('est_principal', true)->value('id') ?? Magasin::value('id');
+        } else {
+            // Gestionnaire / caissier : cantonné au magasin renseigné sur sa fiche employé.
+            $this->magasin_id = $user->magasin_id
+                ?? Magasin::where('est_principal', true)->value('id')
+                ?? Magasin::value('id');
+            $this->magasinLocked = true;
+        }
     }
 
     public function updatingSearch() { $this->resetPage(); }
     public function updatingFilterStockBas() { $this->resetPage(); }
-    public function updatedMagasinId() { $this->resetPage(); }
+
+    public function updatedMagasinId()
+    {
+        // Sécurité côté serveur : un non-admin ne peut jamais changer de magasin,
+        // même en manipulant la requête Livewire.
+        if ($this->magasinLocked) {
+            $this->magasin_id = auth()->user()->magasin_id ?? $this->magasin_id;
+        }
+        $this->resetPage();
+    }
 
     public function setTab(string $tab)
     {
@@ -90,6 +110,7 @@ class Index extends Component
         $magasins = Magasin::orderBy('nom')->get();
 
         $produits = Produit::where('est_stockable', true)
+            ->where('magasin_id', $this->magasin_id)
             ->with(['stocks' => fn ($q) => $q->where('magasin_id', $this->magasin_id), 'category'])
             ->when($this->search, fn ($q) => $q->where('designation', 'ilike', "%{$this->search}%"))
             ->when($this->filterStockBas, function ($q) {
@@ -112,6 +133,7 @@ class Index extends Component
 
         // KPI globaux pour le magasin sélectionné
         $statsBase = Produit::where('est_stockable', true)
+            ->where('magasin_id', $this->magasin_id)
             ->withSum(['stocks as stock_qte' => fn ($q) => $q->where('magasin_id', $this->magasin_id)], 'quantite')
             ->get();
 

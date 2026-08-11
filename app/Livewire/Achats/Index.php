@@ -184,8 +184,6 @@ class Index extends Component
                 'notes' => $this->notes ?: null,
             ]);
 
-            $magasin = Magasin::where('est_principal', true)->first() ?? Magasin::first();
-
             foreach ($this->lignes as $ligne) {
                 AchatItem::create([
                     'achat_id' => $achat->id,
@@ -196,11 +194,9 @@ class Index extends Component
                     'total_ht' => $ligne['total_ht'],
                 ]);
 
-                if ($magasin) {
-                    $produit = Produit::find($ligne['product_id']);
-                    if ($produit && $produit->est_stockable) {
-                        $stockService->entree($produit, $magasin->id, $ligne['qte'], 'Achat ' . $achat->num_achat, $achat->num_achat);
-                    }
+                $produit = Produit::find($ligne['product_id']);
+                if ($produit && $produit->est_stockable && $produit->magasin_id) {
+                    $stockService->entree($produit, $produit->magasin_id, $ligne['qte'], 'Achat ' . $achat->num_achat, $achat->num_achat);
                 }
             }
 
@@ -250,7 +246,10 @@ class Index extends Component
 
         $fournisseurs = Fournisseur::orderBy('nom')->get();
 
+        $ownMagasinId = auth()->user()->hasFullAccess() ? null : auth()->user()->magasin_id;
+
         $produitsFiltres = Produit::when($this->produitSearch, fn ($q) => $q->where('designation', 'ilike', "%{$this->produitSearch}%"))
+            ->when($ownMagasinId, fn ($q) => $q->where('magasin_id', $ownMagasinId))
             ->orderBy('designation')
             ->limit(8)
             ->get();

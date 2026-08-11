@@ -1,6 +1,5 @@
 <div class="space-y-4">
-    <x-page-header title="Produits"
-        subtitle="{{ $nbProduitsTotal }} produit(s) - <span class='text-emerald-600 font-semibold'>{{ number_format($valeurStock, 0, ',', ' ') }} F CFA</span> en stock">
+    <x-page-header title="Produits" :subtitle="$subtitle">
         <x-slot:actions>
             <button wire:click="create" class="btn-primary whitespace-nowrap">+ Nouveau produit</button>
         </x-slot:actions>
@@ -9,6 +8,9 @@
     @if (session('success'))
         <div class="p-3 rounded-lg bg-emerald-50 text-emerald-700 text-sm">{{ session('success') }}</div>
     @endif
+    @if (session('error'))
+        <div class="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{{ session('error') }}</div>
+    @endif
 
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <input type="text" wire:model.live.debounce.300ms="search" placeholder="Rechercher un produit ou code-barres..."
@@ -16,6 +18,15 @@
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
+        @unless ($ownMagasinId)
+            <select wire:model.live="filterMagasin" class="field sm:w-48">
+                <option value="">Tous les magasins</option>
+                @foreach ($magasins as $m)
+                    <option value="{{ $m->id }}">{{ $m->nom }}</option>
+                @endforeach
+            </select>
+        @endunless
+
         <select wire:model.live="filterCategory" class="field sm:w-48">
             <option value="">Toutes les catégories</option>
             @foreach ($categories as $cat)
@@ -35,7 +46,7 @@
             <option value="rupture">Rupture de stock</option>
         </select>
 
-        @if ($search || $filterCategory || $filterStatut !== 'actifs' || $filterStock)
+        @if ($search || $filterCategory || $filterMagasin || $filterStatut !== 'actifs' || $filterStock)
             <button wire:click="resetFilters" class="text-sm text-slate-500 hover:text-red-600 underline">Réinitialiser</button>
         @endif
     </div>
@@ -45,6 +56,9 @@
             <thead class="bg-slate-50 text-slate-500 text-left">
                 <tr>
                     <th class="px-4 py-3">Désignation</th>
+                    @unless ($ownMagasinId)
+                        <th class="px-4 py-3">Magasin</th>
+                    @endunless
                     <th class="px-4 py-3">Catégorie</th>
                     <th class="px-4 py-3">Prix achat</th>
                     <th class="px-4 py-3">Prix vente</th>
@@ -63,6 +77,9 @@
                                 <p class="text-xs text-slate-400">{{ $p->sku }}</p>
                             @endif
                         </td>
+                        @unless ($ownMagasinId)
+                            <td class="px-4 py-3 text-slate-500">{{ $p->magasin?->nom ?? '—' }}</td>
+                        @endunless
                         <td class="px-4 py-3 text-slate-500">{{ $p->category?->nom ?? '—' }}</td>
                         <td class="px-4 py-3">{{ number_format($p->prix_achat, 0, ',', ' ') }} F</td>
                         <td class="px-4 py-3">{{ number_format($p->prix_vente, 0, ',', ' ') }} F</td>
@@ -86,7 +103,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">Aucun produit.</td></tr>
+                    <tr><td colspan="{{ $ownMagasinId ? 7 : 8 }}" class="px-4 py-8 text-center text-slate-400">Aucun produit ne correspond à ces filtres.</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -116,7 +133,7 @@
                         </div>
 
                         <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Designation</label>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Nom du produit *</label>
                             <input type="text" wire:model="designation" placeholder="HP OMNIBOOK 14" class="field">
                             @error('designation') <span class="text-red-600 text-xs">{{ $message }}</span> @enderror
                         </div>
@@ -152,9 +169,27 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-1">Marque</label>
-                                <input type="text" wire:model="marque" placeholder="Apple" class="field">
+                                <input type="text" wire:model="marque" placeholder="HP" class="field">
                             </div>
                         </div>
+
+                        @if ($ownMagasinId)
+                            <div class="flex items-center gap-2 p-3 rounded-lg bg-slate-50 border border-slate-100 text-sm text-slate-600">
+                                <x-icon name="store" class="w-4 h-4 text-slate-400" />
+                                Ce produit sera créé pour <strong class="text-ink-950">{{ auth()->user()->magasin?->nom }}</strong>
+                            </div>
+                        @else
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Magasin *</label>
+                                <select wire:model="magasin_id" class="field">
+                                    <option value="">Sélectionner un magasin</option>
+                                    @foreach ($magasins as $m)
+                                        <option value="{{ $m->id }}">{{ $m->nom }}</option>
+                                    @endforeach
+                                </select>
+                                @error('magasin_id') <span class="text-red-600 text-xs">{{ $message }}</span> @enderror
+                            </div>
+                        @endif
 
                         <div class="grid sm:grid-cols-2 gap-3">
                             <div>

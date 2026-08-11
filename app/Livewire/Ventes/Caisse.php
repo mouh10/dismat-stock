@@ -213,6 +213,7 @@ class Caisse extends Component
     public function render()
     {
         $produits = Produit::where('actif', true)
+            ->where('magasin_id', $this->magasinId)
             ->when($this->search, fn ($q) => $q->where(function ($q2) {
                 $q2->where('designation', 'ilike', "%{$this->search}%")
                    ->orWhere('code_barres', 'ilike', "%{$this->search}%");

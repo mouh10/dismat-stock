@@ -152,10 +152,6 @@
                     </button>
                     <div x-show="open" x-transition style="display: none;"
                          class="absolute right-0 mt-2 w-52 bg-white rounded-xl border border-slate-200 shadow-lg py-1.5 z-50">
-                        <div class="px-3 py-2 border-b border-slate-100">
-                            <p class="text-sm font-medium text-ink-950 truncate">{{ $user->email }}</p>
-                            <span class="inline-block mt-1 px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 text-xs font-medium capitalize">{{ $user->role }}</span>
-                        </div>
                         @if ($user->hasRole('admin'))
                             <a href="{{ route('parametres.index') }}" class="block px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">Paramètres</a>
                         @endif
