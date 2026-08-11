@@ -13,31 +13,52 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     nodejs \
     npm \
-    && docker-php-ext-install pdo pdo_pgsql mbstring bcmath exif pcntl zip
+    && docker-php-ext-install \
+        pdo \
+        pdo_pgsql \
+        mbstring \
+        bcmath \
+        exif \
+        pcntl \
+        zip
 
-# Installation de Composer
+# Installer Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Répertoire de travail
-WORKDIR /var/www
+WORKDIR /var/www/html
 
-# Copie du projet
+# Copier uniquement les fichiers Composer
+COPY composer.json composer.lock* ./
+
+# Installer les dépendances PHP sans exécuter les scripts Laravel
+RUN composer install \
+    --no-dev \
+    --no-scripts \
+    --optimize-autoloader
+
+# Copier le reste du projet
 COPY . .
 
-# Installation des dépendances PHP
-RUN composer install --no-dev --optimize-autoloader
-
-# Installation des dépendances Node
-RUN npm install
-
-# Compilation des assets Vite
-RUN npm run build
+# Créer les dossiers Laravel
+RUN mkdir -p storage/framework/cache/data \
+    storage/framework/sessions \
+    storage/framework/views \
+    storage/framework/testing \
+    bootstrap/cache
 
 # Permissions
-RUN chmod -R 775 storage bootstrap/cache
+RUN chmod -R 777 storage bootstrap/cache
 
-# Port Render
+# Exécuter les scripts Composer
+RUN composer dump-autoload --optimize
+RUN php artisan package:discover --ansi
+
+# Dépendances Node
+RUN npm install
+
+# Compiler Vite
+RUN npm run build
+
 EXPOSE 10000
 
-# Démarrage de Laravel
-CMD php artisan serve --host=0.0.0.0 --port=$PORT
+CMD php artisan serve --host=0.0.0.0 --port=${PORT:-10000}
