@@ -18,14 +18,14 @@
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
-        @unless ($ownMagasinId)
+        @if ($showMagasinSelector)
             <select wire:model.live="filterMagasin" class="field sm:w-48">
                 <option value="">Tous les magasins</option>
                 @foreach ($magasins as $m)
                     <option value="{{ $m->id }}">{{ $m->nom }}</option>
                 @endforeach
             </select>
-        @endunless
+        @endif
 
         <select wire:model.live="filterCategory" class="field sm:w-48">
             <option value="">Toutes les catégories</option>
@@ -56,9 +56,9 @@
             <thead class="bg-slate-50 text-slate-500 text-left">
                 <tr>
                     <th class="px-4 py-3">Désignation</th>
-                    @unless ($ownMagasinId)
+                    @if ($showMagasinSelector)
                         <th class="px-4 py-3">Magasin</th>
-                    @endunless
+                    @endif
                     <th class="px-4 py-3">Catégorie</th>
                     <th class="px-4 py-3">Prix achat</th>
                     <th class="px-4 py-3">Prix vente</th>
@@ -77,9 +77,9 @@
                                 <p class="text-xs text-slate-400">{{ $p->sku }}</p>
                             @endif
                         </td>
-                        @unless ($ownMagasinId)
+                        @if ($showMagasinSelector)
                             <td class="px-4 py-3 text-slate-500">{{ $p->magasin?->nom ?? '—' }}</td>
-                        @endunless
+                        @endif
                         <td class="px-4 py-3 text-slate-500">{{ $p->category?->nom ?? '—' }}</td>
                         <td class="px-4 py-3">{{ number_format($p->prix_achat, 0, ',', ' ') }} F</td>
                         <td class="px-4 py-3">{{ number_format($p->prix_vente, 0, ',', ' ') }} F</td>
@@ -93,7 +93,7 @@
                             @endif
                         </td>
                         <td class="px-4 py-3">
-                            <span class="px-2 py-0.5 rounded-full text-xs {{ $p->actif ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500' }}">
+                            <span class="badge {{ $p->actif ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500' }}">
                                 {{ $p->actif ? 'Actif' : 'Inactif' }}
                             </span>
                         </td>
@@ -103,7 +103,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="{{ $ownMagasinId ? 7 : 8 }}" class="px-4 py-8 text-center text-slate-400">Aucun produit ne correspond à ces filtres.</td></tr>
+                    <tr><td colspan="{{ $showMagasinSelector ? 8 : 7 }}" class="px-4 py-8 text-center text-slate-400">Aucun produit ne correspond à ces filtres.</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -134,7 +134,7 @@
 
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">Nom du produit *</label>
-                            <input type="text" wire:model="designation" placeholder="HP OMNIBOOK 14" class="field">
+                            <input type="text" wire:model="designation" placeholder="Ex: iPhone 15 Pro 256GB" class="field">
                             @error('designation') <span class="text-red-600 text-xs">{{ $message }}</span> @enderror
                         </div>
 
@@ -169,16 +169,11 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-1">Marque</label>
-                                <input type="text" wire:model="marque" placeholder="HP" class="field">
+                                <input type="text" wire:model="marque" placeholder="Ex: Apple" class="field">
                             </div>
                         </div>
 
-                        @if ($ownMagasinId)
-                            <div class="flex items-center gap-2 p-3 rounded-lg bg-slate-50 border border-slate-100 text-sm text-slate-600">
-                                <x-icon name="store" class="w-4 h-4 text-slate-400" />
-                                Ce produit sera créé pour <strong class="text-ink-950">{{ auth()->user()->magasin?->nom }}</strong>
-                            </div>
-                        @else
+                        @if ($showMagasinSelector)
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-1">Magasin *</label>
                                 <select wire:model="magasin_id" class="field">
@@ -188,6 +183,11 @@
                                     @endforeach
                                 </select>
                                 @error('magasin_id') <span class="text-red-600 text-xs">{{ $message }}</span> @enderror
+                            </div>
+                        @else
+                            <div class="flex items-center gap-2 p-3 rounded-lg bg-slate-50 border border-slate-100 text-sm text-slate-600">
+                                <x-icon name="store" class="w-4 h-4 text-slate-400" />
+                                Ce produit sera créé pour <strong class="text-ink-950">{{ auth()->user()->magasin?->nom }}</strong>
                             </div>
                         @endif
 

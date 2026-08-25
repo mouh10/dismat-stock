@@ -9,7 +9,6 @@
         <div class="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{{ session('error') }}</div>
     @endif
 
-    {{-- Cartes KPI --}}
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="card p-4">
             <div class="flex items-center justify-between mb-1">
@@ -41,7 +40,6 @@
         </div>
     </div>
 
-    {{-- Onglets --}}
     <div class="inline-flex items-center gap-1 p-1 rounded-lg bg-slate-100">
         <button wire:click="setTab('etat')"
                 class="px-3.5 py-1.5 rounded-md text-sm font-medium transition {{ $activeTab === 'etat' ? 'bg-white text-ink-950 shadow-sm' : 'text-slate-500 hover:text-ink-950' }}">
@@ -53,7 +51,6 @@
         </button>
     </div>
 
-    {{-- Filtres --}}
     <div class="flex flex-col sm:flex-row sm:items-center gap-2">
         <div class="relative flex-1 sm:max-w-xs">
             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><x-icon name="search" class="w-4 h-4" /></span>

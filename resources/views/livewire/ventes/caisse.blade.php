@@ -15,13 +15,25 @@
         <div class="lg:col-span-3 p-3 rounded-lg bg-red-50 text-red-700 text-sm">{{ session('error') }}</div>
     @endif
 
-    {{-- Produits --}}
     <div class="lg:col-span-2 space-y-3">
+        @if ($magasinSwitchable)
+            <div class="flex items-center gap-2">
+                <span class="text-sm text-slate-500 flex items-center gap-1.5 shrink-0">
+                    <x-icon name="store" class="w-4 h-4" /> Magasin :
+                </span>
+                <select wire:change="switchMagasin($event.target.value)" class="field sm:w-56">
+                    @foreach ($magasinsDisponibles as $m)
+                        <option value="{{ $m->id }}" @selected($m->id === $magasinId)>{{ $m->nom }}</option>
+                    @endforeach
+                </select>
+            </div>
+        @endif
+
         <input type="text" wire:model.live.debounce.200ms="search" placeholder="Rechercher un produit ou scanner un code-barres..."
                class="w-full rounded-lg border border-slate-300 text-sm focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 focus:outline-none shadow-sm">
 
         <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
-            @foreach ($produits as $p)
+            @forelse ($produits as $p)
                 @php $rupture = $p->stock_disponible !== null && $p->stock_disponible <= 0; @endphp
                 <button wire:click="addToCart({{ $p->id }})" type="button" @disabled($rupture)
                         class="relative bg-white border border-slate-200 rounded-xl p-3 text-left transition {{ $rupture ? 'opacity-50 cursor-not-allowed' : 'hover:border-brand-400 hover:shadow-sm' }}">
@@ -36,11 +48,12 @@
                         <span class="inline-block mt-1 text-xs text-slate-400">{{ (int) $p->stock_disponible }} en stock</span>
                     @endif
                 </button>
-            @endforeach
+            @empty
+                <p class="col-span-full text-center text-slate-400 py-8">Aucun produit dans ce magasin.</p>
+            @endforelse
         </div>
     </div>
 
-    {{-- Panier --}}
     <div class="card p-4 flex flex-col h-fit sticky top-4">
         <h3 class="font-display font-semibold text-ink-950 mb-3">Panier</h3>
 
@@ -108,7 +121,7 @@
                 <span>{{ number_format($this->total, 0, ',', ' ') }} F</span>
             </div>
 
-            <select wire:model="mode_paiement" class="w-full rounded-lg border border-slate-300 text-sm focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 focus:outline-none shadow-sm">
+            <select wire:model="mode_paiement" class="w-full rounded-lg border border-slate-300 text-sm shadow-sm focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 focus:outline-none">
                 <option value="especes">Espèces</option>
                 <option value="orange_money">Orange Money</option>
                 <option value="wave">Wave</option>
@@ -118,7 +131,7 @@
             @if ($mode_paiement === 'especes')
                 <div>
                     <label class="block text-xs text-slate-500 mb-1">Montant reçu</label>
-                    <input type="number" step="0.01" wire:model.live="montant_recu" class="w-full rounded-lg border border-slate-300 text-sm focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 focus:outline-none shadow-sm">
+                    <input type="number" step="0.01" wire:model.live="montant_recu" class="w-full rounded-lg border border-slate-300 text-sm shadow-sm focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 focus:outline-none">
                     @if ($montant_recu > 0)
                         <p class="text-xs text-slate-500 mt-1">Monnaie à rendre : <span class="font-medium">{{ number_format($this->monnaie, 0, ',', ' ') }} F</span></p>
                     @endif

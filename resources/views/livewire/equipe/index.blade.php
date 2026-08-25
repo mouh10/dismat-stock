@@ -50,7 +50,19 @@
                             <p class="text-xs text-slate-400">{{ $m->email }}</p>
                         </td>
                         <td class="px-4 py-3 capitalize">{{ str_replace('_', ' ', $m->role) }}</td>
-                        <td class="px-4 py-3 text-slate-500">{{ $m->magasin?->nom ?? '—' }}</td>
+                        <td class="px-4 py-3 text-slate-500">
+                            @if ($m->role === 'gestionnaire' && $m->magasins->count())
+                                @if ($m->magasins->count() === 1)
+                                    {{ $m->magasins->first()->nom }}
+                                @else
+                                    <span class="badge border border-slate-200 text-slate-600" title="{{ $m->magasins->pluck('nom')->join(', ') }}">
+                                        {{ $m->magasins->count() }} magasins
+                                    </span>
+                                @endif
+                            @else
+                                {{ $m->magasin?->nom ?? '—' }}
+                            @endif
+                        </td>
                         <td class="px-4 py-3">
                             <span class="badge {{ $m->actif ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500' }}">{{ $m->actif ? 'Actif' : 'Inactif' }}</span>
                         </td>
@@ -133,15 +145,25 @@
                             @error('password') <span class="text-red-600 text-xs">{{ $message }}</span> @enderror
                         </div>
 
-                        <div class="grid sm:grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-1">Rôle *</label>
-                                <select wire:model="role" class="field">
-                                    <option value="admin">Admin</option>
-                                    <option value="gestionnaire">Gestionnaire</option>
-                                    <option value="caissier">Caissier</option>
-                                </select>
-                            </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Rôle *</label>
+                            <select wire:model.live="role" class="field">
+                                <option value="admin">Admin</option>
+                                <option value="gestionnaire">Gestionnaire</option>
+                                <option value="caissier">Caissier</option>
+                            </select>
+                            <p class="text-xs text-slate-400 mt-1">
+                                @if ($role === 'admin')
+                                    L'admin a accès à tous les magasins et modules.
+                                @elseif ($role === 'gestionnaire')
+                                    Un gestionnaire peut être rattaché à un ou plusieurs magasins.
+                                @else
+                                    Un caissier est rattaché à un seul point de vente (celui de sa caisse).
+                                @endif
+                            </p>
+                        </div>
+
+                        @if ($role === 'caissier')
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-1">Point de vente</label>
                                 <select wire:model="magasin_id" class="field">
@@ -151,7 +173,27 @@
                                     @endforeach
                                 </select>
                             </div>
-                        </div>
+                        @elseif ($role === 'gestionnaire')
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Magasins gérés</label>
+                                <div class="space-y-1.5 max-h-40 overflow-y-auto border border-slate-200 rounded-lg p-3">
+                                    @forelse ($magasins as $mg)
+                                        <label class="flex items-center gap-2.5 text-sm text-slate-700 py-0.5">
+                                            <input type="checkbox" wire:model="magasin_ids" value="{{ $mg->id }}"
+                                                   class="rounded border border-slate-300 text-brand-600 focus:ring-2 focus:ring-brand-500/30 focus:outline-none cursor-pointer">
+                                            {{ $mg->nom }}
+                                            @if ($mg->est_principal)
+                                                <span class="badge border border-slate-200 text-slate-500 text-[10px]">Principal</span>
+                                            @endif
+                                        </label>
+                                    @empty
+                                        <p class="text-sm text-slate-400">Aucun magasin créé pour l'instant.</p>
+                                    @endforelse
+                                </div>
+                                @error('magasin_ids') <span class="text-red-600 text-xs">{{ $message }}</span> @enderror
+                                <p class="text-xs text-slate-400 mt-1">Coche tous les magasins que ce gestionnaire doit superviser.</p>
+                            </div>
+                        @endif
 
                         <label class="flex items-center gap-2 text-sm text-slate-700">
                             <input type="checkbox" wire:model="actif" class="rounded border border-slate-300 text-brand-600 focus:ring-2 focus:ring-brand-500/30 focus:outline-none cursor-pointer"> Compte actif

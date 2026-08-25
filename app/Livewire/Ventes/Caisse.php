@@ -15,7 +15,7 @@ use Livewire\Component;
 class Caisse extends Component
 {
     public string $search = '';
-    public array $cart = []; // [produit_id => ['designation','prix','qte','remise']]
+    public array $cart = [];
     public ?int $client_id = null;
     public string $clientSearch = '';
     public bool $clientDropdownOpen = false;
@@ -24,23 +24,37 @@ class Caisse extends Component
 
     public ?int $lastFactureId = null;
     public ?int $magasinId = null;
+    public bool $magasinSwitchable = false;
 
     public function mount()
     {
-        $this->magasinId = auth()->user()->magasin_id
-            ?? Magasin::where('est_principal', true)->value('id')
-            ?? Magasin::value('id');
+        $ids = auth()->user()->accessibleMagasinIds();
+
+        if ($ids === null) {
+            $this->magasinId = auth()->user()->magasin_id
+                ?? Magasin::where('est_principal', true)->value('id')
+                ?? Magasin::value('id');
+        } else {
+            $this->magasinId = $ids[0] ?? null;
+            $this->magasinSwitchable = count($ids) > 1;
+        }
     }
 
-    /**
-     * Stock actuellement disponible pour un produit dans le magasin de la caisse.
-     */
+    public function switchMagasin(int $magasinId)
+    {
+        $ids = auth()->user()->accessibleMagasinIds();
+        if ($ids !== null && ! in_array($magasinId, $ids, true)) {
+            return; // sécurité : impossible de basculer vers un magasin non autorisé
+        }
+        $this->magasinId = $magasinId;
+        $this->reset(['cart', 'client_id', 'clientSearch', 'montant_recu']);
+    }
+
     protected function stockDisponible(Produit $produit): float
     {
         if (! $produit->est_stockable) {
-            return INF; // pas de suivi de stock => pas de limite
+            return INF;
         }
-
         return $this->magasinId ? $produit->stockDansMagasin($this->magasinId) : 0;
     }
 
@@ -108,28 +122,6 @@ class Caisse extends Component
         return max(0, $this->montant_recu - $this->total);
     }
 
-    public function openClientDropdown()
-    {
-        $this->clientDropdownOpen = true;
-    }
-
-    public function selectClient(?int $id)
-    {
-        $this->client_id = $id;
-
-        if ($id) {
-            $client = Client::find($id);
-            $this->clientSearch = $client ? trim($client->nom . ' ' . $client->prenom) : '';
-        } else {
-            $this->clientSearch = '';
-        }
-
-        $this->clientDropdownOpen = false;
-    }
-
-    /**
-     * Stock disponible par produit du panier (pour désactiver le "+" à la limite).
-     */
     public function getCartDisponibleProperty(): array
     {
         $result = [];
@@ -138,6 +130,23 @@ class Caisse extends Component
             $result[$produitId] = $produit ? $this->stockDisponible($produit) : INF;
         }
         return $result;
+    }
+
+    public function openClientDropdown()
+    {
+        $this->clientDropdownOpen = true;
+    }
+
+    public function selectClient(?int $id)
+    {
+        $this->client_id = $id;
+        if ($id) {
+            $client = Client::find($id);
+            $this->clientSearch = $client ? trim($client->nom . ' ' . $client->prenom) : '';
+        } else {
+            $this->clientSearch = '';
+        }
+        $this->clientDropdownOpen = false;
     }
 
     public function validerVente(StockService $stockService)
@@ -182,8 +191,6 @@ class Caisse extends Component
                 foreach ($this->cart as $produitId => $item) {
                     $produit = Produit::findOrFail($produitId);
 
-                    // Re-vérification côté serveur au moment de la validation :
-                    // le stock a pu changer depuis l'ajout au panier (autre caissier, etc.)
                     if ($produit->est_stockable) {
                         $stockService->sortie($produit, $magasin->id, $item['qte'], 'Vente ' . $facture->num_facture, $facture->num_facture);
                     }
@@ -212,6 +219,10 @@ class Caisse extends Component
 
     public function render()
     {
+        $magasinsDisponibles = $this->magasinSwitchable
+            ? Magasin::whereIn('id', auth()->user()->accessibleMagasinIds())->orderBy('nom')->get()
+            : collect();
+
         $produits = Produit::where('actif', true)
             ->where('magasin_id', $this->magasinId)
             ->when($this->search, fn ($q) => $q->where(function ($q2) {
@@ -236,7 +247,7 @@ class Caisse extends Component
             ->limit(8)
             ->get();
 
-        return view('livewire.ventes.caisse', compact('produits', 'clientsFiltres'))
+        return view('livewire.ventes.caisse', compact('produits', 'clientsFiltres', 'magasinsDisponibles'))
             ->layout('layouts.app', ['title' => 'Caisse']);
     }
 }

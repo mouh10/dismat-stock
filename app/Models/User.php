@@ -35,9 +35,21 @@ class User extends Authenticatable
         return $this->belongsTo(Tenant::class);
     }
 
+    /**
+     * Magasin "principal" de l'utilisateur (utilisé par les caissiers pour la Caisse).
+     */
     public function magasin()
     {
         return $this->belongsTo(Magasin::class);
+    }
+
+    /**
+     * Tous les magasins auxquels un gestionnaire a explicitement été rattaché.
+     * Table pivot magasin_user (many-to-many).
+     */
+    public function magasins()
+    {
+        return $this->belongsToMany(Magasin::class, 'magasin_user')->orderBy('nom');
     }
 
     public function isSuperAdmin(): bool
@@ -50,21 +62,43 @@ class User extends Authenticatable
         return in_array($this->role, ['super_admin', 'admin']);
     }
 
-    /**
-     * true si l'utilisateur a l'un des rôles donnés (super_admin passe toujours).
-     */
     public function hasRole(string ...$roles): bool
     {
         return $this->role === 'super_admin' || in_array($this->role, $roles, true);
     }
 
     /**
-     * true si l'utilisateur voit les données de toute la boutique (ventes, achats,
-     * mouvements de stock de tous les employés). false = ne voit que les siennes.
+     * true si l'utilisateur voit les données de toute la boutique (tous magasins confondus).
      * Seuls admin et super_admin ont une vision globale.
      */
     public function hasFullAccess(): bool
     {
         return $this->isAdmin();
+    }
+
+    /**
+     * Liste des identifiants de magasins que cet utilisateur peut voir/gérer.
+     * - null   => accès total (admin/super_admin), aucune restriction à appliquer.
+     * - array  => uniquement ces magasins (gestionnaire : plusieurs possibles,
+     *             caissier : un seul, celui de sa fiche employé).
+     * Retourne un tableau vide si aucun magasin n'est assigné (par sécurité,
+     * ne montre rien plutôt que tout).
+     */
+    public function accessibleMagasinIds(): ?array
+    {
+        if ($this->hasFullAccess()) {
+            return null;
+        }
+
+        if ($this->role === 'gestionnaire') {
+            $ids = $this->magasins()->pluck('magasins.id')->all();
+
+            // Rétro-compatibilité : si aucun magasin n'est encore assigné via la table
+            // pivot mais qu'un magasin_id "classique" existe, on l'utilise en secours.
+            return count($ids) ? $ids : array_filter([$this->magasin_id]);
+        }
+
+        // Caissier : un seul magasin, celui de sa fiche employé.
+        return array_filter([$this->magasin_id]);
     }
 }

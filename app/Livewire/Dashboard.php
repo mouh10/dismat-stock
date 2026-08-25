@@ -49,12 +49,10 @@ class Dashboard extends Component
         $varJour = $this->variation($ventesJour, $ventesHier);
         $varMois = $this->variation($ventesMois, $ventesMoisDernier);
 
-        // Créances/dettes/clients : données partagées de la boutique, visibles par tous les rôles
         $totalCreances = (float) Creance::whereIn('statut', ['en_cours', 'partiel'])->sum('montant_restant');
         $totalDettes = (float) DetteFournisseur::whereIn('statut', ['en_cours', 'partiel'])->sum('montant_restant');
         $nbClients = Client::count();
 
-        // Évolution des ventes sur les 7 derniers jours (pour le graphique)
         $debutPeriode = today()->subDays(6);
         $ventesParJour = Facture::selectRaw('date_facture, SUM(montant_ttc) as total')
             ->where('date_facture', '>=', $debutPeriode)
@@ -70,7 +68,6 @@ class Dashboard extends Component
             $chartData[] = (float) ($ventesParJour[$jour->toDateString()] ?? 0);
         }
 
-        // Top produits du mois par revenu
         $topProduits = FactureItem::query()
             ->join('factures', 'factures.id', '=', 'facture_items.facture_id')
             ->whereMonth('factures.date_facture', now()->month)
@@ -82,18 +79,18 @@ class Dashboard extends Component
             ->take(5)
             ->get();
 
-        // Alertes stock bas : pour un non-admin, cantonné à son magasin
-        $magasinId = $mesVentes ? auth()->user()->magasin_id : null;
+        // Alertes stock bas : cantonnées au(x) magasin(s) accessible(s) pour un non-admin
+        $magasinIds = auth()->user()->accessibleMagasinIds(); // null = admin (tout voir)
 
         $produitsEnAlerte = Produit::where('est_stockable', true)
             ->where('actif', true)
-            ->when($magasinId, fn ($q) => $q->where('magasin_id', $magasinId))
-            ->withSum(['stocks as stock_total' => fn ($q) => $q->when($magasinId, fn ($q2) => $q2->where('magasin_id', $magasinId))], 'quantite')
+            ->when($magasinIds !== null, fn ($q) => $q->whereIn('magasin_id', $magasinIds))
+            ->withSum(['stocks as stock_total' => fn ($q) => $q->when($magasinIds !== null, fn ($q2) => $q2->whereIn('magasin_id', $magasinIds))], 'quantite')
             ->get()
             ->filter(fn ($p) => (float) ($p->stock_total ?? 0) <= $p->stock_min)
             ->take(5);
 
-        $nbProduits = Produit::where('actif', true)->when($magasinId, fn ($q) => $q->where('magasin_id', $magasinId))->count();
+        $nbProduits = Produit::where('actif', true)->when($magasinIds !== null, fn ($q) => $q->whereIn('magasin_id', $magasinIds))->count();
 
         $margeJour = (float) FactureItem::join('factures', 'factures.id', '=', 'facture_items.facture_id')
             ->join('produits', 'produits.id', '=', 'facture_items.product_id')

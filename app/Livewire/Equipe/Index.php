@@ -17,18 +17,20 @@ class Index extends Component
 
     public bool $showModal = false;
     public ?int $editingId = null;
-    public ?int $confirmingDeleteId = null;
-    public string $confirmTitle = 'Retirer ce membre ?';
-    public string $confirmMessage = "Ce membre perdra l'accès à l'application.";
 
     public string $nom = '';
     public string $prenom = '';
     public string $email = '';
     public string $telephone = '';
     public string $role = 'caissier';
-    public ?int $magasin_id = null;
+    public ?int $magasin_id = null; // caissier : magasin unique
+    public array $magasin_ids = []; // gestionnaire : plusieurs magasins possibles
     public string $password = '';
     public bool $actif = true;
+
+    public ?int $confirmingDeleteId = null;
+    public string $confirmTitle = 'Retirer ce membre ?';
+    public string $confirmMessage = "Ce membre perdra l'accès à l'application.";
 
     protected function rules(): array
     {
@@ -44,6 +46,8 @@ class Index extends Component
             'telephone' => 'nullable|string|max:30',
             'role' => 'required|in:admin,caissier,gestionnaire',
             'magasin_id' => 'nullable|exists:magasins,id',
+            'magasin_ids' => 'array',
+            'magasin_ids.*' => 'exists:magasins,id',
             'actif' => 'boolean',
         ];
 
@@ -56,7 +60,7 @@ class Index extends Component
 
     public function create()
     {
-        $this->reset(['nom', 'prenom', 'email', 'telephone', 'magasin_id', 'password', 'editingId']);
+        $this->reset(['nom', 'prenom', 'email', 'telephone', 'magasin_id', 'magasin_ids', 'password', 'editingId']);
         $this->role = 'caissier';
         $this->actif = true;
         $this->showModal = true;
@@ -72,6 +76,7 @@ class Index extends Component
         $this->telephone = (string) $u->telephone;
         $this->role = $u->role === 'super_admin' ? 'admin' : $u->role;
         $this->magasin_id = $u->magasin_id;
+        $this->magasin_ids = $u->magasins()->pluck('magasins.id')->all();
         $this->password = '';
         $this->actif = (bool) $u->actif;
         $this->showModal = true;
@@ -80,7 +85,15 @@ class Index extends Component
     public function save()
     {
         $data = $this->validate();
-        unset($data['password']);
+        $magasinIds = $data['magasin_ids'] ?? [];
+        unset($data['password'], $data['magasin_ids']);
+
+        // Un caissier n'a qu'un seul magasin (celui du champ classique) ;
+        // un gestionnaire peut en avoir plusieurs (table pivot) ;
+        // un admin n'est restreint à aucun magasin.
+        if ($data['role'] !== 'caissier') {
+            $data['magasin_id'] = $data['role'] === 'gestionnaire' ? ($magasinIds[0] ?? null) : null;
+        }
 
         if ($this->editingId) {
             $user = User::findOrFail($this->editingId);
@@ -92,12 +105,16 @@ class Index extends Component
         } else {
             $data['password'] = Hash::make($this->password);
             $data['tenant_id'] = auth()->user()->tenant_id;
-            User::create($data);
+            $user = User::create($data);
             session()->flash('success', 'Membre ajouté à l\'équipe.');
         }
 
+        // Synchronise les magasins gérés (uniquement pertinent pour un gestionnaire ;
+        // vide sinon, pour ne pas laisser de rattachements obsolètes).
+        $user->magasins()->sync($data['role'] === 'gestionnaire' ? $magasinIds : []);
+
         $this->showModal = false;
-        $this->reset(['nom', 'prenom', 'email', 'telephone', 'magasin_id', 'password', 'editingId']);
+        $this->reset(['nom', 'prenom', 'email', 'telephone', 'magasin_id', 'magasin_ids', 'password', 'editingId']);
     }
 
     public function confirmDelete(int $id)
@@ -132,7 +149,7 @@ class Index extends Component
 
     public function render()
     {
-        $membres = User::with('magasin')
+        $membres = User::with(['magasin', 'magasins'])
             ->when($this->filterRole, fn ($q) => $q->where('role', $this->filterRole))
             ->when($this->filterActif === 'actif', fn ($q) => $q->where('actif', true))
             ->when($this->filterActif === 'inactif', fn ($q) => $q->where('actif', false))

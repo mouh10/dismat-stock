@@ -32,31 +32,23 @@ class Index extends Component
 
     public function mount()
     {
-        $user = auth()->user();
+        $ids = auth()->user()->accessibleMagasinIds();
 
-        if ($user->hasFullAccess()) {
+        if ($ids === null) {
+            // Admin : accès total, part sur le magasin principal par défaut.
             $this->magasin_id = Magasin::where('est_principal', true)->value('id') ?? Magasin::value('id');
-        } else {
-            // Gestionnaire / caissier : cantonné au magasin renseigné sur sa fiche employé.
-            $this->magasin_id = $user->magasin_id
-                ?? Magasin::where('est_principal', true)->value('id')
-                ?? Magasin::value('id');
+        } elseif (count($ids) === 1) {
+            // Un seul magasin autorisé (caissier, ou gestionnaire à un seul magasin) : verrouillé.
+            $this->magasin_id = $ids[0];
             $this->magasinLocked = true;
+        } else {
+            // Gestionnaire multi-magasins : sélecteur limité à ses magasins.
+            $this->magasin_id = $ids[0] ?? null;
         }
     }
 
     public function updatingSearch() { $this->resetPage(); }
     public function updatingFilterStockBas() { $this->resetPage(); }
-
-    public function updatedMagasinId()
-    {
-        // Sécurité côté serveur : un non-admin ne peut jamais changer de magasin,
-        // même en manipulant la requête Livewire.
-        if ($this->magasinLocked) {
-            $this->magasin_id = auth()->user()->magasin_id ?? $this->magasin_id;
-        }
-        $this->resetPage();
-    }
 
     public function setTab(string $tab)
     {
@@ -67,6 +59,16 @@ class Index extends Component
     public function resetFilters()
     {
         $this->reset(['search', 'filterStockBas']);
+        $this->resetPage();
+    }
+
+    public function updatedMagasinId()
+    {
+        $ids = auth()->user()->accessibleMagasinIds();
+        // Sécurité serveur : impossible de choisir un magasin hors de sa liste autorisée.
+        if ($ids !== null && ! in_array($this->magasin_id, $ids, true)) {
+            $this->magasin_id = $ids[0] ?? null;
+        }
         $this->resetPage();
     }
 
@@ -107,7 +109,8 @@ class Index extends Component
 
     public function render()
     {
-        $magasins = Magasin::orderBy('nom')->get();
+        $ids = auth()->user()->accessibleMagasinIds();
+        $magasins = $ids === null ? Magasin::orderBy('nom')->get() : Magasin::whereIn('id', $ids)->orderBy('nom')->get();
 
         $produits = Produit::where('est_stockable', true)
             ->where('magasin_id', $this->magasin_id)

@@ -20,11 +20,11 @@ class Index extends Component
     #[Url(as: 'categorie')]
     public string $filterCategory = '';
     #[Url(as: 'magasin')]
-    public string $filterMagasin = ''; // uniquement utilisable par un admin
+    public string $filterMagasin = '';
     #[Url(as: 'statut')]
-    public string $filterStatut = 'actifs'; // actifs | inactifs | tous
+    public string $filterStatut = 'actifs';
     #[Url(as: 'stock')]
-    public string $filterStock = ''; // '' | alerte | rupture
+    public string $filterStock = '';
     public bool $showModal = false;
     public ?int $editingId = null;
     public ?int $confirmingDeleteId = null;
@@ -47,7 +47,6 @@ class Index extends Component
     public bool $est_stockable = true;
     public float $stock_initial = 0;
 
-    /** Options de la liste déroulante "Unité de mesure". */
     public array $unites = [
         'pc' => 'Pièce (pc)',
         'kg' => 'Kilogramme (kg)',
@@ -59,7 +58,6 @@ class Index extends Component
         'g' => 'Gramme (g)',
     ];
 
-    /** Options de la liste déroulante "Type de produit". */
     public array $typesProduit = [
         'neuf' => 'Standard (Neuf)',
         'occasion' => 'Occasion',
@@ -101,6 +99,16 @@ class Index extends Component
         $this->resetPage();
     }
 
+    /** Le ou les magasins auxquels cet utilisateur peut assigner un produit. */
+    protected function magasinsAutorises()
+    {
+        $ids = auth()->user()->accessibleMagasinIds();
+
+        return $ids === null
+            ? Magasin::orderBy('nom')->get()
+            : Magasin::whereIn('id', $ids)->orderBy('nom')->get();
+    }
+
     public function create()
     {
         $this->reset([
@@ -111,24 +119,32 @@ class Index extends Component
         $this->type_produit = 'neuf';
         $this->actif = true;
         $this->est_stockable = true;
-        // Un non-admin crée toujours un produit pour son propre magasin.
-        $this->magasin_id = auth()->user()->hasFullAccess() ? null : auth()->user()->magasin_id;
+
+        $ids = auth()->user()->accessibleMagasinIds();
+        // Si l'utilisateur n'a accès qu'à un seul magasin, on le pré-sélectionne.
+        $this->magasin_id = ($ids !== null && count($ids) === 1) ? $ids[0] : null;
+
         $this->showModal = true;
     }
 
-    /** Génère un SKU aléatoire lisible, ex: SKU-8X4K2QWZ. */
     public function generateSku()
     {
         $this->sku = 'SKU-' . strtoupper(substr(bin2hex(random_bytes(5)), 0, 8));
+    }
+
+    protected function peutAccederAuMagasin(?int $magasinId): bool
+    {
+        $ids = auth()->user()->accessibleMagasinIds();
+
+        return $ids === null || in_array($magasinId, $ids, true);
     }
 
     public function edit(int $id)
     {
         $p = Produit::findOrFail($id);
 
-        // Un non-admin ne peut modifier que les produits de son propre magasin.
-        if (! auth()->user()->hasFullAccess() && $p->magasin_id !== auth()->user()->magasin_id) {
-            session()->flash('error', "Ce produit appartient à un autre magasin.");
+        if (! $this->peutAccederAuMagasin($p->magasin_id)) {
+            session()->flash('error', "Ce produit appartient à un magasin auquel vous n'avez pas accès.");
             return;
         }
 
@@ -154,20 +170,20 @@ class Index extends Component
 
     public function save()
     {
-        // Un non-admin ne peut jamais assigner un produit à un autre magasin que le sien,
+        // Impossible d'assigner un produit à un magasin hors de sa liste autorisée,
         // même en manipulant la requête.
-        if (! auth()->user()->hasFullAccess()) {
-            $this->magasin_id = auth()->user()->magasin_id;
+        if (! $this->peutAccederAuMagasin($this->magasin_id)) {
+            session()->flash('error', "Vous n'avez pas accès à ce magasin.");
+            $this->showModal = false;
+            return;
+        }
 
-            // Vérification supplémentaire : impossible de modifier un produit d'un autre magasin
-            // même en trafiquant directement l'identifiant sans passer par edit().
-            if ($this->editingId) {
-                $cible = Produit::find($this->editingId);
-                if (! $cible || $cible->magasin_id !== auth()->user()->magasin_id) {
-                    session()->flash('error', "Action non autorisée : ce produit appartient à un autre magasin.");
-                    $this->showModal = false;
-                    return;
-                }
+        if ($this->editingId) {
+            $cible = Produit::find($this->editingId);
+            if (! $cible || ! $this->peutAccederAuMagasin($cible->magasin_id)) {
+                session()->flash('error', 'Action non autorisée.');
+                $this->showModal = false;
+                return;
             }
         }
 
@@ -199,8 +215,8 @@ class Index extends Component
     public function confirmDelete(int $id)
     {
         $p = Produit::findOrFail($id);
-        if (! auth()->user()->hasFullAccess() && $p->magasin_id !== auth()->user()->magasin_id) {
-            session()->flash('error', "Ce produit appartient à un autre magasin.");
+        if (! $this->peutAccederAuMagasin($p->magasin_id)) {
+            session()->flash('error', "Ce produit appartient à un magasin auquel vous n'avez pas accès.");
             return;
         }
         $this->confirmingDeleteId = $id;
@@ -223,15 +239,13 @@ class Index extends Component
 
     public function render()
     {
-        $user = auth()->user();
-        $ownMagasinId = $user->hasFullAccess() ? null : $user->magasin_id;
+        $ids = auth()->user()->accessibleMagasinIds(); // null = admin (tout voir)
 
         $produits = Produit::with(['category', 'magasin'])
             ->withSum('stocks as stock_total', 'quantite')
-            // Non-admin : uniquement les produits de son propre magasin, sans exception.
-            ->when($ownMagasinId, fn ($q) => $q->where('magasin_id', $ownMagasinId))
-            // Admin : peut filtrer par magasin via le sélecteur, ou tout voir.
-            ->when(! $ownMagasinId && $this->filterMagasin, fn ($q) => $q->where('magasin_id', $this->filterMagasin))
+            ->when($ids !== null, fn ($q) => $q->whereIn('magasin_id', $ids))
+            ->when($ids === null && $this->filterMagasin, fn ($q) => $q->where('magasin_id', $this->filterMagasin))
+            ->when($ids !== null && $this->filterMagasin, fn ($q) => $q->where('magasin_id', $this->filterMagasin))
             ->when($this->search, fn ($q) => $q->where(function ($q2) {
                 $q2->where('designation', 'ilike', "%{$this->search}%")
                    ->orWhere('code_barres', 'ilike', "%{$this->search}%")
@@ -246,23 +260,25 @@ class Index extends Component
             ->paginate(10);
 
         $categories = Category::orderBy('nom')->get();
-        $magasins = Magasin::orderBy('nom')->get();
+        $magasins = $this->magasinsAutorises();
+        // Multi-magasins ? on affiche le sélecteur (filtre + formulaire) même pour un non-admin.
+        $showMagasinSelector = $ids === null || count($ids) > 1;
 
-        $nbProduitsTotal = Produit::when($ownMagasinId, fn ($q) => $q->where('magasin_id', $ownMagasinId))->count();
+        $nbProduitsTotal = Produit::when($ids !== null, fn ($q) => $q->whereIn('magasin_id', $ids))->count();
         $valeurStock = (float) DB::table('stocks')
             ->join('produits', 'produits.id', '=', 'stocks.produit_id')
-            ->when($ownMagasinId, fn ($q) => $q->where('produits.magasin_id', $ownMagasinId))
+            ->when($ids !== null, fn ($q) => $q->whereIn('produits.magasin_id', $ids))
             ->selectRaw('COALESCE(SUM(stocks.quantite * produits.prix_achat), 0) as total')
             ->value('total');
 
         $subtitle = "{$nbProduitsTotal} produit(s)";
-        if ($ownMagasinId) {
-            $subtitle .= " <span class='text-slate-400'>(" . ($user->magasin?->nom ?? 'votre magasin') . ' uniquement)</span>';
+        if ($ids !== null && ! $showMagasinSelector && auth()->user()->magasin) {
+            $subtitle .= " <span class='text-slate-400'>(" . auth()->user()->magasin->nom . ' uniquement)</span>';
         }
         $subtitle .= " - <span class='text-emerald-600 font-semibold'>" . number_format($valeurStock, 0, ',', ' ') . ' F CFA</span> en stock';
 
         return view('livewire.produits.index', compact(
-            'produits', 'categories', 'magasins', 'nbProduitsTotal', 'valeurStock', 'ownMagasinId', 'subtitle'
+            'produits', 'categories', 'magasins', 'nbProduitsTotal', 'valeurStock', 'subtitle', 'showMagasinSelector'
         ))->layout('layouts.app', ['title' => 'Produits']);
     }
 }
