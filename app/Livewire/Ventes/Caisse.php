@@ -25,6 +25,7 @@ class Caisse extends Component
     public ?int $lastFactureId = null;
     public ?int $magasinId = null;
     public bool $magasinSwitchable = false;
+    public bool $inclureTva = false;
 
     public function mount()
     {
@@ -112,9 +113,24 @@ class Caisse extends Component
         unset($this->cart[$produitId]);
     }
 
-    public function getTotalProperty(): float
+    public function getSousTotalProperty(): float
     {
         return collect($this->cart)->sum(fn ($item) => ($item['prix'] * $item['qte']) - $item['remise']);
+    }
+
+    public function getTvaMontantProperty(): float
+    {
+        if (! $this->inclureTva) {
+            return 0;
+        }
+        $taux = (float) (auth()->user()->tenant->tva_defaut ?? 18);
+
+        return $this->sousTotal * ($taux / 100);
+    }
+
+    public function getTotalProperty(): float
+    {
+        return $this->sousTotal + $this->tvaMontant;
     }
 
     public function getMonnaieProperty(): float
@@ -163,11 +179,14 @@ class Caisse extends Component
             return;
         }
 
+        $sousTotal = $this->sousTotal;
+        $tva = $this->tvaMontant;
         $total = $this->total;
+        $tauxTva = $this->inclureTva ? (float) (auth()->user()->tenant->tva_defaut ?? 18) : 0;
         $factureId = null;
 
         try {
-            DB::transaction(function () use ($magasin, $stockService, $total, &$factureId) {
+            DB::transaction(function () use ($magasin, $stockService, $sousTotal, $tva, $tauxTva, $total, &$factureId) {
                 $numFacture = 'TK-' . now()->format('ymd') . '-' . str_pad((string) (Facture::whereDate('created_at', today())->count() + 1), 4, '0', STR_PAD_LEFT);
 
                 $facture = Facture::create([
@@ -177,9 +196,9 @@ class Caisse extends Component
                     'type_doc' => 'ticket',
                     'num_facture' => $numFacture,
                     'statut' => 'payee',
-                    'montant_ht' => $total,
-                    'taux_tva' => 0,
-                    'tva' => 0,
+                    'montant_ht' => $sousTotal,
+                    'taux_tva' => $tauxTva,
+                    'tva' => $tva,
                     'montant_remise' => collect($this->cart)->sum('remise'),
                     'montant_ttc' => $total,
                     'montant_paye' => $total,
@@ -213,7 +232,7 @@ class Caisse extends Component
 
         session()->flash('success', 'Vente enregistrée avec succès.');
         $this->lastFactureId = $factureId;
-        $this->reset(['cart', 'client_id', 'montant_recu', 'clientSearch', 'clientDropdownOpen']);
+        $this->reset(['cart', 'client_id', 'montant_recu', 'clientSearch', 'clientDropdownOpen', 'inclureTva']);
         $this->mode_paiement = 'especes';
     }
 

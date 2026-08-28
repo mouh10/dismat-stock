@@ -116,7 +116,30 @@
         </div>
 
         <div class="border-t border-slate-200 pt-3 space-y-2">
-            <div class="flex justify-between font-semibold text-slate-800">
+            <div class="grid grid-cols-2 gap-2">
+                <button type="button" wire:click="$set('inclureTva', false)"
+                        class="p-2.5 rounded-lg border-2 text-sm font-medium text-center transition
+                               {{ ! $inclureTva ? 'border-ink-950 bg-ink-950 text-white' : 'border-slate-200 text-slate-600 hover:border-slate-300' }}">
+                    Sans TVA
+                </button>
+                <button type="button" wire:click="$set('inclureTva', true)"
+                        class="p-2.5 rounded-lg border-2 text-sm font-medium text-center transition
+                               {{ $inclureTva ? 'border-ink-950 bg-ink-950 text-white' : 'border-slate-200 text-slate-600 hover:border-slate-300' }}">
+                    TVA {{ rtrim(rtrim(number_format(auth()->user()->tenant->tva_defaut ?? 18, 2), '0'), '.') }}%
+                </button>
+            </div>
+
+            <div class="flex justify-between text-sm text-slate-500">
+                <span>Sous-total</span>
+                <span>{{ number_format($this->sousTotal, 0, ',', ' ') }} F</span>
+            </div>
+            @if ($inclureTva)
+                <div class="flex justify-between text-sm text-slate-500">
+                    <span>TVA</span>
+                    <span>{{ number_format($this->tvaMontant, 0, ',', ' ') }} F</span>
+                </div>
+            @endif
+            <div class="flex justify-between font-semibold text-slate-800 text-base pt-1 border-t border-slate-100">
                 <span>Total</span>
                 <span>{{ number_format($this->total, 0, ',', ' ') }} F</span>
             </div>
