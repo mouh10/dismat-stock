@@ -21,34 +21,47 @@ class Caisse extends Component
     public bool $clientDropdownOpen = false;
     public string $mode_paiement = 'especes';
     public float $montant_recu = 0;
+    public bool $inclureTva = false;
 
     public ?int $lastFactureId = null;
-    public ?int $magasinId = null;
-    public bool $magasinSwitchable = false;
-    public bool $inclureTva = false;
+
+    /** Filtre d'affichage du catalogue : '' = tous mes magasins, sinon un ID précis. */
+    public string $filterMagasin = '';
+
+    /**
+     * Magasin auquel appartient le panier en cours. Se fixe automatiquement au
+     * premier produit ajouté (impossible de mélanger deux magasins dans une vente,
+     * puisque le stock est un lieu physique).
+     */
+    public ?int $cartMagasinId = null;
+
+    public bool $multiMagasins = false;
 
     public function mount()
     {
         $ids = auth()->user()->accessibleMagasinIds();
-
-        if ($ids === null) {
-            $this->magasinId = auth()->user()->magasin_id
-                ?? Magasin::where('est_principal', true)->value('id')
-                ?? Magasin::value('id');
-        } else {
-            $this->magasinId = $ids[0] ?? null;
-            $this->magasinSwitchable = count($ids) > 1;
-        }
+        $this->multiMagasins = $ids === null || count($ids) > 1;
     }
 
-    public function switchMagasin(int $magasinId)
+    /** Les magasins que l'utilisateur a le droit de parcourir/vendre. */
+    protected function magasinsAutorises()
     {
         $ids = auth()->user()->accessibleMagasinIds();
-        if ($ids !== null && ! in_array($magasinId, $ids, true)) {
-            return; // sécurité : impossible de basculer vers un magasin non autorisé
-        }
-        $this->magasinId = $magasinId;
-        $this->reset(['cart', 'client_id', 'clientSearch', 'montant_recu']);
+
+        return $ids === null
+            ? Magasin::orderBy('nom')->get()
+            : Magasin::whereIn('id', $ids)->orderBy('nom')->get();
+    }
+
+    protected function magasinIdsAutorises(): ?array
+    {
+        return auth()->user()->accessibleMagasinIds();
+    }
+
+    public function updatedFilterMagasin()
+    {
+        // Changer le filtre d'affichage ne touche pas au panier en cours : on peut
+        // continuer à chercher d'autres produits du même magasin que le panier actif.
     }
 
     protected function stockDisponible(Produit $produit): float
@@ -56,12 +69,22 @@ class Caisse extends Component
         if (! $produit->est_stockable) {
             return INF;
         }
-        return $this->magasinId ? $produit->stockDansMagasin($this->magasinId) : 0;
+
+        return $produit->stockDansMagasin($produit->magasin_id);
     }
 
     public function addToCart(int $produitId)
     {
         $produit = Produit::findOrFail($produitId);
+
+        // Un panier ne peut contenir que des produits d'un seul et même magasin
+        // (le stock retiré doit venir d'un lieu physique unique).
+        if ($this->cartMagasinId !== null && $produit->magasin_id !== $this->cartMagasinId) {
+            $magasinPanier = Magasin::find($this->cartMagasinId)?->nom ?? 'un autre magasin';
+            session()->flash('error', "Ce produit appartient à un autre magasin. Ton panier contient déjà des articles de « {$magasinPanier} » — vide-le d'abord pour changer de magasin.");
+            return;
+        }
+
         $disponible = $this->stockDisponible($produit);
         $qteActuelle = $this->cart[$produitId]['qte'] ?? 0;
 
@@ -79,6 +102,7 @@ class Caisse extends Component
                 'qte' => 1,
                 'remise' => 0,
             ];
+            $this->cartMagasinId = $produit->magasin_id;
         }
     }
 
@@ -106,11 +130,24 @@ class Caisse extends Component
         } else {
             unset($this->cart[$produitId]);
         }
+
+        if (empty($this->cart)) {
+            $this->cartMagasinId = null;
+        }
     }
 
     public function removeFromCart(int $produitId)
     {
         unset($this->cart[$produitId]);
+
+        if (empty($this->cart)) {
+            $this->cartMagasinId = null;
+        }
+    }
+
+    public function viderPanier()
+    {
+        $this->reset(['cart', 'cartMagasinId']);
     }
 
     public function getSousTotalProperty(): float
@@ -172,7 +209,7 @@ class Caisse extends Component
             return;
         }
 
-        $magasin = $this->magasinId ? Magasin::find($this->magasinId) : null;
+        $magasin = $this->cartMagasinId ? Magasin::find($this->cartMagasinId) : null;
 
         if (! $magasin) {
             session()->flash('error', 'Aucun magasin configuré.');
@@ -232,28 +269,32 @@ class Caisse extends Component
 
         session()->flash('success', 'Vente enregistrée avec succès.');
         $this->lastFactureId = $factureId;
-        $this->reset(['cart', 'client_id', 'montant_recu', 'clientSearch', 'clientDropdownOpen', 'inclureTva']);
+        $this->reset(['cart', 'cartMagasinId', 'client_id', 'montant_recu', 'clientSearch', 'clientDropdownOpen', 'inclureTva']);
         $this->mode_paiement = 'especes';
     }
 
     public function render()
     {
-        $magasinsDisponibles = $this->magasinSwitchable
-            ? Magasin::whereIn('id', auth()->user()->accessibleMagasinIds())->orderBy('nom')->get()
-            : collect();
+        $ids = $this->magasinIdsAutorises(); // null = admin (tout voir)
+        $magasinsDisponibles = $this->magasinsAutorises();
 
         $produits = Produit::where('actif', true)
-            ->where('magasin_id', $this->magasinId)
+            // Une vente déjà commencée reste cantonnée à son magasin ; sinon,
+            // on affiche par défaut tous les magasins accessibles à l'utilisateur,
+            // ou seulement celui choisi dans le filtre.
+            ->when($this->cartMagasinId, fn ($q) => $q->where('magasin_id', $this->cartMagasinId))
+            ->when(! $this->cartMagasinId && $this->filterMagasin, fn ($q) => $q->where('magasin_id', $this->filterMagasin))
+            ->when(! $this->cartMagasinId && ! $this->filterMagasin && $ids !== null, fn ($q) => $q->whereIn('magasin_id', $ids))
             ->when($this->search, fn ($q) => $q->where(function ($q2) {
                 $q2->where('designation', 'ilike', "%{$this->search}%")
                    ->orWhere('code_barres', 'ilike', "%{$this->search}%");
             }))
-            ->with(['stocks' => fn ($q) => $q->where('magasin_id', $this->magasinId)])
+            ->with(['stocks', 'magasin'])
             ->orderBy('designation')
-            ->limit(24)
+            ->limit(30)
             ->get()
             ->map(function ($p) {
-                $p->stock_disponible = $p->est_stockable ? (float) ($p->stocks->first()->quantite ?? 0) : null;
+                $p->stock_disponible = $p->est_stockable ? (float) $p->stockDansMagasin($p->magasin_id) : null;
                 return $p;
             });
 

@@ -16,17 +16,28 @@
     @endif
 
     <div class="lg:col-span-2 space-y-3">
-        @if ($magasinSwitchable)
-            <div class="flex items-center gap-2">
-                <span class="text-sm text-slate-500 flex items-center gap-1.5 shrink-0">
-                    <x-icon name="store" class="w-4 h-4" /> Magasin :
-                </span>
-                <select wire:change="switchMagasin($event.target.value)" class="field sm:w-56">
-                    @foreach ($magasinsDisponibles as $m)
-                        <option value="{{ $m->id }}" @selected($m->id === $magasinId)>{{ $m->nom }}</option>
-                    @endforeach
-                </select>
-            </div>
+        @if ($multiMagasins)
+            @if ($cartMagasinId)
+                <div class="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-brand-50 border border-brand-100 text-sm">
+                    <span class="flex items-center gap-1.5 text-brand-800">
+                        <x-icon name="store" class="w-4 h-4" />
+                        Vente en cours pour <strong>{{ $magasinsDisponibles->firstWhere('id', $cartMagasinId)?->nom }}</strong>
+                    </span>
+                    <button type="button" wire:click="viderPanier" class="text-brand-700 hover:underline font-medium shrink-0">Changer de magasin</button>
+                </div>
+            @else
+                <div class="flex items-center gap-2">
+                    <span class="text-sm text-slate-500 flex items-center gap-1.5 shrink-0">
+                        <x-icon name="store" class="w-4 h-4" /> Magasin :
+                    </span>
+                    <select wire:model.live="filterMagasin" class="field sm:w-56">
+                        <option value="">Tous mes magasins</option>
+                        @foreach ($magasinsDisponibles as $m)
+                            <option value="{{ $m->id }}">{{ $m->nom }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            @endif
         @endif
 
         <input type="text" wire:model.live.debounce.200ms="search" placeholder="Rechercher un produit ou scanner un code-barres..."
@@ -47,9 +58,12 @@
                     @elseif ($p->stock_disponible !== null)
                         <span class="inline-block mt-1 text-xs text-slate-400">{{ (int) $p->stock_disponible }} en stock</span>
                     @endif
+                    @if ($multiMagasins && ! $filterMagasin && ! $cartMagasinId)
+                        <span class="inline-block mt-1 text-xs text-slate-400 truncate w-full">🏬 {{ $p->magasin?->nom }}</span>
+                    @endif
                 </button>
             @empty
-                <p class="col-span-full text-center text-slate-400 py-8">Aucun produit dans ce magasin.</p>
+                <p class="col-span-full text-center text-slate-400 py-8">Aucun produit trouvé.</p>
             @endforelse
         </div>
     </div>
