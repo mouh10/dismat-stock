@@ -21,6 +21,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/caisse', \App\Livewire\Ventes\Caisse::class)->name('caisse.index');
         Route::get('/ventes', \App\Livewire\Ventes\Historique::class)->name('ventes.index');
         Route::get('/factures/{facture}/pdf', [\App\Http\Controllers\FactureController::class, 'pdf'])->name('factures.pdf');
+        Route::get('/factures/{facture}/bon-livraison', [\App\Http\Controllers\FactureController::class, 'bonLivraison'])->name('factures.bon-livraison');
         Route::get('/clients', \App\Livewire\Clients\Index::class)->name('clients.index');
     });
 

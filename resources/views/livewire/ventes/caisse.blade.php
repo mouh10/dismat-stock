@@ -7,7 +7,10 @@
         <div class="lg:col-span-3 p-3 rounded-lg bg-emerald-50 text-emerald-700 text-sm flex items-center justify-between">
             <span>{{ session('success') }}</span>
             @if ($lastFactureId)
-                <a href="{{ route('factures.pdf', $lastFactureId) }}" target="_blank" class="text-brand-700 font-medium hover:underline">Voir le reçu PDF</a>
+                <span class="flex items-center gap-3 shrink-0">
+                    <a href="{{ route('factures.pdf', $lastFactureId) }}" target="_blank" class="text-brand-700 font-medium hover:underline">Voir la facture</a>
+                    <a href="{{ route('factures.bon-livraison', $lastFactureId) }}" target="_blank" class="text-brand-700 font-medium hover:underline">Bon de livraison</a>
+                </span>
             @endif
         </div>
     @endif

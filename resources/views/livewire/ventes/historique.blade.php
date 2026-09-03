@@ -85,8 +85,11 @@
                         <a href="{{ route('factures.pdf', $f) }}" target="_blank" title="Voir le PDF" class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 hover:text-ink-950 transition">
                             <x-icon name="eye" class="w-[18px] h-[18px]" />
                         </a>
-                        <a href="{{ route('factures.pdf', $f) }}?download=1" title="Télécharger" class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 hover:text-ink-950 transition">
+                        <a href="{{ route('factures.pdf', $f) }}?download=1" title="Télécharger la facture" class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 hover:text-ink-950 transition">
                             <x-icon name="download" class="w-[18px] h-[18px]" />
+                        </a>
+                        <a href="{{ route('factures.bon-livraison', $f) }}" target="_blank" title="Bon de livraison" class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 hover:text-ink-950 transition">
+                            <x-icon name="truck" class="w-[18px] h-[18px]" />
                         </a>
                         <button type="button" title="Partager"
                                 onclick="navigator.share ? navigator.share({title: '{{ $f->num_facture }}', url: '{{ route('factures.pdf', $f) }}'}) : (navigator.clipboard.writeText('{{ route('factures.pdf', $f) }}'), alert('Lien copié !'))"

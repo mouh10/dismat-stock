@@ -13,17 +13,6 @@
         }
         .header-table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
         .header-table td { vertical-align: top; }
-        .logo-badge {
-            display: inline-block;
-            width: 30px; height: 30px;
-            background-color: #0ea5ea;
-            color: #01225a;
-            text-align: center;
-            font-weight: bold;
-            font-size: 16px;
-            border-radius: 6px;
-            line-height: 30px;
-        }
         .company-name { font-size: 18px; font-weight: bold; color: #01225a; margin: 4px 0 2px; }
         .muted { color: #64748b; font-size: 10px; line-height: 1.5; }
         .doc-title {
@@ -42,7 +31,7 @@
             font-size: 9px;
             font-weight: bold;
             text-transform: uppercase;
-            background-color: #fff7ec;
+            background-color: #eaf6ff;
             color: #0a6699;
             margin-top: 6px;
         }
@@ -101,6 +90,11 @@
 </head>
 <body>
 
+    @php
+        $typeLabels = ['devis' => 'Devis', 'avoir' => 'Avoir'];
+        $docLabel = $typeLabels[$facture->type_doc] ?? 'Facture';
+    @endphp
+
     <table class="header-table">
         <tr>
             <td style="width: 55%;">
@@ -123,7 +117,7 @@
                 </div>
             </td>
             <td style="width: 45%;">
-                <div class="doc-title">{{ $facture->type_doc === 'ticket' ? 'Ticket de caisse' : $facture->type_doc }}</div>
+                <div class="doc-title">{{ $docLabel }}</div>
                 <div class="doc-meta">
                     N° {{ $facture->num_facture }}<br>
                     Date : {{ $facture->date_facture->format('d/m/Y') }}<br>

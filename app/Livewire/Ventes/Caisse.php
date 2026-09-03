@@ -230,7 +230,7 @@ class Caisse extends Component
                     'client_id' => $this->client_id,
                     'utilisateur_id' => auth()->id(),
                     'magasin_id' => $magasin->id,
-                    'type_doc' => 'ticket',
+                    'type_doc' => 'facture',
                     'num_facture' => $numFacture,
                     'statut' => 'payee',
                     'montant_ht' => $sousTotal,
