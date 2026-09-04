@@ -92,25 +92,48 @@
             </div>
 
             @if ($clientDropdownOpen)
-                <div class="absolute z-40 mt-1 w-full bg-white rounded-lg border border-slate-200 shadow-lg max-h-56 overflow-y-auto modal-enter">
-                    <button type="button" wire:click="selectClient(null)"
-                            class="w-full text-left px-3 py-2 text-sm hover:bg-brand-50 {{ ! $client_id ? 'bg-brand-50 text-brand-800 font-medium' : 'text-slate-700' }}">
-                        Client comptoir
-                    </button>
-                    @forelse ($clientsFiltres as $c)
-                        <button type="button" wire:click="selectClient({{ $c->id }})"
-                                class="w-full text-left px-3 py-2 text-sm hover:bg-brand-50 border-t border-slate-50 {{ $client_id === $c->id ? 'bg-brand-50 text-brand-800 font-medium' : 'text-slate-700' }}">
-                            {{ $c->nom }} {{ $c->prenom }}
-                            @if ($c->telephone)
-                                <span class="text-xs text-slate-400 block">{{ $c->telephone }}</span>
-                            @endif
+                <div class="absolute z-40 mt-1 w-full bg-white rounded-lg border border-slate-200 shadow-lg modal-enter overflow-hidden">
+                    <div class="max-h-44 overflow-y-auto">
+                        <button type="button" wire:click="selectClient(null)"
+                                class="w-full text-left px-3 py-2 text-sm hover:bg-brand-50 {{ ! $client_id ? 'bg-brand-50 text-brand-800 font-medium' : 'text-slate-700' }}">
+                            Client comptoir
                         </button>
-                    @empty
-                        <p class="px-3 py-3 text-sm text-slate-400 text-center">Aucun client trouvé.</p>
-                    @endforelse
+                        @forelse ($clientsFiltres as $c)
+                            <button type="button" wire:click="selectClient({{ $c->id }})"
+                                    class="w-full text-left px-3 py-2 text-sm hover:bg-brand-50 border-t border-slate-50 {{ $client_id === $c->id ? 'bg-brand-50 text-brand-800 font-medium' : 'text-slate-700' }}">
+                                {{ $c->nom }} {{ $c->prenom }}
+                                @if ($c->telephone)
+                                    <span class="text-xs text-slate-400 block">{{ $c->telephone }}</span>
+                                @endif
+                            </button>
+                        @empty
+                            <p class="px-3 py-3 text-sm text-slate-400 text-center">Aucun client trouvé.</p>
+                        @endforelse
+                    </div>
+                    <button type="button" wire:click="openQuickClientForm"
+                            class="w-full text-left px-3 py-2.5 text-sm text-brand-700 font-semibold hover:bg-brand-50 border-t-2 border-brand-100 bg-white flex items-center gap-1.5 shrink-0">
+                        <span class="text-base leading-none">+</span>
+                        Créer{{ $clientSearch ? ' « '.$clientSearch.' »' : ' un nouveau client' }}
+                    </button>
                 </div>
             @endif
         </div>
+
+        @if ($showQuickClientForm)
+            <div class="mb-3 p-3 rounded-lg border border-brand-200 bg-brand-50/40 space-y-2">
+                <p class="text-xs font-medium text-brand-800 uppercase tracking-wide">Nouveau client</p>
+                <div class="grid grid-cols-2 gap-2">
+                    <input type="text" wire:model="quickClientNom" placeholder="Nom *" class="field text-sm py-1.5">
+                    <input type="text" wire:model="quickClientPrenom" placeholder="Prénom" class="field text-sm py-1.5">
+                </div>
+                <input type="text" wire:model="quickClientTelephone" placeholder="Téléphone" class="field text-sm py-1.5">
+                @error('quickClientNom') <span class="text-red-600 text-xs">{{ $message }}</span> @enderror
+                <div class="flex justify-end gap-2 pt-1">
+                    <button type="button" wire:click="cancelQuickClientForm" class="btn-secondary text-xs py-1.5 px-3">Annuler</button>
+                    <button type="button" wire:click="saveQuickClient" class="btn-primary text-xs py-1.5 px-3">Créer et sélectionner</button>
+                </div>
+            </div>
+        @endif
 
         <div class="space-y-2 max-h-72 overflow-y-auto mb-3">
             @forelse ($cart as $produitId => $item)

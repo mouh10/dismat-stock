@@ -19,6 +19,13 @@ class Caisse extends Component
     public ?int $client_id = null;
     public string $clientSearch = '';
     public bool $clientDropdownOpen = false;
+
+    // Création rapide d'un nouveau client, sans quitter la Caisse
+    public bool $showQuickClientForm = false;
+    public string $quickClientNom = '';
+    public string $quickClientPrenom = '';
+    public string $quickClientTelephone = '';
+
     public string $mode_paiement = 'especes';
     public float $montant_recu = 0;
     public bool $inclureTva = false;
@@ -200,6 +207,46 @@ class Caisse extends Component
             $this->clientSearch = '';
         }
         $this->clientDropdownOpen = false;
+    }
+
+    /** Ouvre le petit formulaire de création rapide, en pré-remplissant le nom déjà tapé. */
+    public function openQuickClientForm()
+    {
+        $this->quickClientNom = $this->clientSearch;
+        $this->quickClientPrenom = '';
+        $this->quickClientTelephone = '';
+        $this->clientDropdownOpen = false;
+        $this->showQuickClientForm = true;
+    }
+
+    public function cancelQuickClientForm()
+    {
+        $this->showQuickClientForm = false;
+    }
+
+    /** Crée le client à la volée et l'attache immédiatement à la vente en cours. */
+    public function saveQuickClient()
+    {
+        $data = $this->validate([
+            'quickClientNom' => 'required|string|max:255',
+            'quickClientPrenom' => 'nullable|string|max:255',
+            'quickClientTelephone' => 'nullable|string|max:30',
+        ], [], [
+            'quickClientNom' => 'nom',
+            'quickClientPrenom' => 'prénom',
+            'quickClientTelephone' => 'téléphone',
+        ]);
+
+        $client = Client::create([
+            'nom' => $data['quickClientNom'],
+            'prenom' => $data['quickClientPrenom'] ?: null,
+            'telephone' => $data['quickClientTelephone'] ?: null,
+            'type_client' => 'particulier',
+        ]);
+
+        $this->selectClient($client->id);
+        $this->showQuickClientForm = false;
+        session()->flash('success', 'Client « ' . trim($client->nom . ' ' . $client->prenom) . ' » créé et sélectionné.');
     }
 
     public function validerVente(StockService $stockService)
