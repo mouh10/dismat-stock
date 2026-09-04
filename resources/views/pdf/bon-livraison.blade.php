@@ -167,7 +167,10 @@
     <table class="signatures">
         <tr>
             <td>
-                <div class="sign-box">
+                <div style="text-align: center;">
+                    <img src="{{ public_path('images/cachet-dismat.jpg') }}" style="width: 100px; height: auto;" alt="Cachet DISMAT">
+                </div>
+                <div class="sign-box" style="margin-top: 10px;">
                     <div class="sign-label">Livré par</div>
                     <div class="sign-name">Nom &amp; signature</div>
                 </div>

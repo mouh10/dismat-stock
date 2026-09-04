@@ -224,7 +224,7 @@ class Caisse extends Component
 
         try {
             DB::transaction(function () use ($magasin, $stockService, $sousTotal, $tva, $tauxTva, $total, &$factureId) {
-                $numFacture = 'TK-' . now()->format('ymd') . '-' . str_pad((string) (Facture::whereDate('created_at', today())->count() + 1), 4, '0', STR_PAD_LEFT);
+                $numFacture = 'FA-' . now()->format('ymd') . '-' . str_pad((string) (Facture::whereDate('created_at', today())->count() + 1), 4, '0', STR_PAD_LEFT);
 
                 $facture = Facture::create([
                     'client_id' => $this->client_id,

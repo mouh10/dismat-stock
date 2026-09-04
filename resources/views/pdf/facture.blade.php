@@ -114,6 +114,7 @@
                     @if ($tenant->email) {{ $tenant->email }}<br>@endif
                     @if ($tenant->ninea) NINEA: {{ $tenant->ninea }}@endif
                     @if ($tenant->rccm) &nbsp;·&nbsp; RCCM: {{ $tenant->rccm }}@endif
+                    <br>ORABANK : SN175 01401 041272404001 26
                 </div>
             </td>
             <td style="width: 45%;">
@@ -203,11 +204,21 @@
         @endif
     </table>
 
-    @if ($facture->notes)
-        <div style="margin-top: 20px; font-size: 10px; color: #64748b;">
-            <strong>Notes :</strong> {{ $facture->notes }}
-        </div>
-    @endif
+    <table style="width: 100%; margin-top: 24px; border-collapse: collapse;">
+        <tr>
+            <td style="width: 55%; vertical-align: bottom;">
+                @if ($facture->notes)
+                    <div style="font-size: 10px; color: #64748b;">
+                        <strong>Notes :</strong> {{ $facture->notes }}
+                    </div>
+                @endif
+            </td>
+            <td style="width: 45%; text-align: center;">
+                <div style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #94a3b8; margin-bottom: 4px;">Cachet &amp; signature</div>
+                <img src="{{ public_path('images/cachet-dismat.jpg') }}" style="width: 130px; height: auto;" alt="Cachet DISMAT">
+            </td>
+        </tr>
+    </table>
 
     <div class="footer">
         {{ $tenant->mentions_legales ?? 'Merci de votre confiance.' }}<br>
