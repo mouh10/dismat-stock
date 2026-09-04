@@ -204,6 +204,10 @@
         @endif
     </table>
 
+    <div style="margin-top: 14px; padding: 8px 12px; background-color: #f8fafc; border-left: 3px solid #01225a; font-size: 10px; font-style: italic; color: #334155;">
+        Arrêtée la présente facture à la somme de : <strong>{{ $montantEnLettres }}</strong>
+    </div>
+
     <table style="width: 100%; margin-top: 24px; border-collapse: collapse;">
         <tr>
             <td style="width: 55%; vertical-align: bottom;">

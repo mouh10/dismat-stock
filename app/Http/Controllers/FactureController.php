@@ -3,18 +3,20 @@
 namespace App\Http\Controllers;
 
 use App\Models\Facture;
+use App\Support\NumberToWordsFr;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 
 class FactureController extends Controller
 {
     /**
-     * Résout le tenant de la facture, avec repli sur celui du vendeur si
-     * l'utilisateur connecté (rare cas de compte mal configuré) n'en a pas.
+     * Résout le tenant de la facture. On privilégie le tenant du vendeur qui a
+     * émis la facture (c'est SA boutique qui doit apparaître dessus), avec un
+     * repli sur celui de l'utilisateur connecté si besoin.
      */
     protected function resolveTenant(Facture $facture)
     {
-        $tenant = auth()->user()->tenant ?? $facture->utilisateur?->tenant;
+        $tenant = $facture->utilisateur?->tenant ?? auth()->user()->tenant;
 
         if (! $tenant) {
             abort(500, "Impossible de générer le document : aucune boutique (tenant) n'est associée à votre compte. Contactez un administrateur.");
@@ -32,9 +34,12 @@ class FactureController extends Controller
         $facture->load(['client', 'items', 'magasin', 'utilisateur', 'paiements']);
         $tenant = $this->resolveTenant($facture);
 
+        $montantEnLettres = ucfirst(NumberToWordsFr::convert((int) round((float) $facture->montant_ttc))) . ' francs CFA';
+
         $pdf = Pdf::loadView('pdf.facture', [
             'facture' => $facture,
             'tenant' => $tenant,
+            'montantEnLettres' => $montantEnLettres,
         ])->setPaper('a4', 'portrait');
 
         $nomFichier = str_replace(['/', '\\', ' '], '-', $facture->num_facture) . '.pdf';
