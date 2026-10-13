@@ -9,6 +9,7 @@ use App\Models\FactureItem;
 use App\Models\Magasin;
 use App\Models\Produit;
 use App\Services\StockService;
+use App\Support\DocNumber;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 
@@ -31,6 +32,8 @@ class Caisse extends Component
     public bool $inclureTva = false;
 
     public ?int $lastFactureId = null;
+    public string $lastDocNum = '';
+    public bool $lastEstProforma = false;
 
     /** Filtre d'affichage du catalogue : '' = tous mes magasins, sinon un ID précis. */
     public string $filterMagasin = '';
@@ -268,10 +271,11 @@ class Caisse extends Component
         $total = $this->total;
         $tauxTva = $this->inclureTva ? (float) (auth()->user()->tenant->tva_defaut ?? 18) : 0;
         $factureId = null;
+        $numCree = '';
 
         try {
-            DB::transaction(function () use ($magasin, $stockService, $sousTotal, $tva, $tauxTva, $total, &$factureId) {
-                $numFacture = 'FA-' . now()->format('ymd') . '-' . str_pad((string) (Facture::whereDate('created_at', today())->count() + 1), 4, '0', STR_PAD_LEFT);
+            DB::transaction(function () use ($magasin, $stockService, $sousTotal, $tva, $tauxTva, $total, &$factureId, &$numCree) {
+                $numFacture = DocNumber::next('FA');
 
                 $facture = Facture::create([
                     'client_id' => $this->client_id,
@@ -290,6 +294,7 @@ class Caisse extends Component
                 ]);
 
                 $factureId = $facture->id;
+                $numCree = $numFacture;
 
                 foreach ($this->cart as $produitId => $item) {
                     $produit = Produit::findOrFail($produitId);
@@ -316,6 +321,76 @@ class Caisse extends Component
 
         session()->flash('success', 'Vente enregistrée avec succès.');
         $this->lastFactureId = $factureId;
+        $this->lastDocNum = $numCree;
+        $this->lastEstProforma = false;
+        $this->reset(['cart', 'cartMagasinId', 'client_id', 'montant_recu', 'clientSearch', 'clientDropdownOpen', 'inclureTva']);
+        $this->mode_paiement = 'especes';
+    }
+
+    /**
+     * Crée une PROFORMA à partir du panier : document de devis chiffré à remettre au
+     * client. Elle ne touche ni au stock, ni à la caisse, ni aux créances ; elle pourra
+     * être transformée en vraie facture plus tard depuis l'historique des ventes.
+     */
+    public function creerProforma()
+    {
+        if (empty($this->cart)) {
+            session()->flash('error', 'Le panier est vide.');
+            return;
+        }
+
+        $magasin = $this->cartMagasinId ? Magasin::find($this->cartMagasinId) : null;
+
+        if (! $magasin) {
+            session()->flash('error', 'Aucun magasin configuré.');
+            return;
+        }
+
+        $sousTotal = $this->sousTotal;
+        $tva = $this->tvaMontant;
+        $total = $this->total;
+        $tauxTva = $this->inclureTva ? (float) (auth()->user()->tenant->tva_defaut ?? 18) : 0;
+        $factureId = null;
+        $numCree = '';
+
+        DB::transaction(function () use ($magasin, $sousTotal, $tva, $tauxTva, $total, &$factureId, &$numCree) {
+            $numCree = DocNumber::next('PF');
+
+            $facture = Facture::create([
+                'client_id' => $this->client_id,
+                'utilisateur_id' => auth()->id(),
+                'magasin_id' => $magasin->id,
+                'type_doc' => 'devis', // une proforma est stockée comme document de type « devis »
+                'num_facture' => $numCree,
+                'statut' => 'brouillon',
+                'montant_ht' => $sousTotal,
+                'taux_tva' => $tauxTva,
+                'tva' => $tva,
+                'montant_remise' => collect($this->cart)->sum('remise'),
+                'montant_ttc' => $total,
+                'montant_paye' => 0,
+                'date_facture' => today(),
+            ]);
+
+            $factureId = $facture->id;
+
+            foreach ($this->cart as $produitId => $item) {
+                FactureItem::create([
+                    'facture_id' => $facture->id,
+                    'product_id' => $produitId,
+                    'designation' => $item['designation'],
+                    'qte' => $item['qte'],
+                    'prix_unitaire' => $item['prix'],
+                    'remise' => $item['remise'],
+                    'total_ht' => ($item['prix'] * $item['qte']) - $item['remise'],
+                ]);
+            }
+        });
+
+        session()->flash('success', "Proforma {$numCree} créée. Le stock n'a pas été modifié.");
+        $this->lastFactureId = $factureId;
+        $this->lastDocNum = $numCree;
+        $this->lastEstProforma = true;
         $this->reset(['cart', 'cartMagasinId', 'client_id', 'montant_recu', 'clientSearch', 'clientDropdownOpen', 'inclureTva']);
         $this->mode_paiement = 'especes';
     }

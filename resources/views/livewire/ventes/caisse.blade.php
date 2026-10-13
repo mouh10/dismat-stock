@@ -4,12 +4,18 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
     @if (session('success'))
-        <div class="lg:col-span-3 p-3 rounded-lg bg-emerald-50 text-emerald-700 text-sm flex items-center justify-between">
+        <div class="lg:col-span-3 p-3 rounded-lg bg-emerald-50 text-emerald-700 text-sm flex flex-wrap items-center justify-between gap-2">
             <span>{{ session('success') }}</span>
             @if ($lastFactureId)
-                <span class="flex items-center gap-3 shrink-0">
-                    <a href="{{ route('factures.pdf', $lastFactureId) }}" target="_blank" class="text-brand-700 font-medium hover:underline">Voir la facture</a>
-                    <a href="{{ route('factures.bon-livraison', $lastFactureId) }}" target="_blank" class="text-brand-700 font-medium hover:underline">Bon de livraison</a>
+                <span class="flex items-center gap-3 flex-wrap">
+                    <a href="{{ route('factures.pdf', $lastFactureId) }}" target="_blank" class="text-brand-700 font-medium hover:underline">
+                        {{ $lastEstProforma ? 'Voir la proforma' : 'Voir la facture' }}
+                    </a>
+                    @unless ($lastEstProforma)
+                        <a href="{{ route('factures.bon-livraison', $lastFactureId) }}" target="_blank" class="text-brand-700 font-medium hover:underline">Bon de livraison</a>
+                    @endunless
+                    <x-share-pdf :url="route('factures.pdf', $lastFactureId)" :filename="$lastDocNum . '.pdf'" label="Partager le PDF"
+                                 class="!w-auto h-8 px-2.5 !text-brand-700 font-medium hover:!bg-emerald-100" />
                 </span>
             @endif
         </div>
@@ -205,6 +211,11 @@
                     class="w-full py-2.5 rounded-lg bg-ink-950 hover:bg-ink-900 text-white shadow-sm hover:shadow-md font-medium transition active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100">
                 Valider la vente
             </button>
+            <button type="button" wire:click="creerProforma" wire:loading.attr="disabled" @disabled(empty($cart))
+                    class="w-full py-2.5 rounded-lg border-2 border-brand-200 bg-white text-brand-800 hover:bg-brand-50 font-medium transition active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">
+                <x-icon name="receipt" class="w-4 h-4" /> Créer une proforma
+            </button>
+            <p class="text-[11px] text-slate-400 text-center -mt-1">La proforma n'enlève rien du stock ni de la caisse.</p>
         </div>
     </div>
     </div>

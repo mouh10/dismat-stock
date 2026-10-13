@@ -91,7 +91,8 @@
 <body>
 
     @php
-        $typeLabels = ['devis' => 'Devis', 'avoir' => 'Avoir'];
+        $estProforma = $facture->type_doc === 'devis';
+        $typeLabels = ['devis' => 'Facture proforma', 'avoir' => 'Avoir'];
         $docLabel = $typeLabels[$facture->type_doc] ?? 'Facture';
     @endphp
 
@@ -122,11 +123,12 @@
                 <div class="doc-meta">
                     N° {{ $facture->num_facture }}<br>
                     Date : {{ $facture->date_facture->format('d/m/Y') }}<br>
+                    @if ($estProforma) Validité : 30 jours<br> @endif
                     @if ($facture->date_echeance) Échéance : {{ $facture->date_echeance->format('d/m/Y') }}<br> @endif
                     Vendeur : {{ $facture->utilisateur?->nom }}
                 </div>
                 <div style="text-align: right;">
-                    <span class="badge-statut">{{ str_replace('_', ' ', $facture->statut) }}</span>
+                    <span class="badge-statut">{{ $estProforma ? 'non contractuelle' : str_replace('_', ' ', $facture->statut) }}</span>
                 </div>
             </td>
         </tr>
@@ -135,7 +137,7 @@
     <div class="divider"></div>
 
     <div class="client-box">
-        <div class="label">Facturé à</div>
+        <div class="label">{{ $estProforma ? 'Destinataire' : 'Facturé à' }}</div>
         @if ($facture->client)
             <div class="name">{{ $facture->client->nom }} {{ $facture->client->prenom }}</div>
             <div class="muted">
@@ -192,11 +194,13 @@
             <td class="label">Total TTC</td>
             <td class="value">{{ number_format($facture->montant_ttc, 0, ',', ' ') }} F</td>
         </tr>
+        @unless ($estProforma)
         <tr>
             <td class="label">Payé</td>
             <td class="value">{{ number_format($facture->montant_paye, 0, ',', ' ') }} F</td>
         </tr>
-        @if ($facture->resteAPayer() > 0)
+        @endunless
+        @if (! $estProforma && $facture->resteAPayer() > 0)
         <tr>
             <td class="label">Reste à payer</td>
             <td class="value">{{ number_format($facture->resteAPayer(), 0, ',', ' ') }} F</td>
@@ -205,7 +209,7 @@
     </table>
 
     <div style="margin-top: 14px; padding: 8px 12px; background-color: #f8fafc; border-left: 3px solid #01225a; font-size: 10px; font-style: italic; color: #334155;">
-        Arrêtée la présente facture à la somme de : <strong>{{ $montantEnLettres }}</strong>
+        Arrêtée la présente {{ $estProforma ? 'facture proforma' : 'facture' }} à la somme de : <strong>{{ $montantEnLettres }}</strong>
     </div>
 
     <table style="width: 100%; margin-top: 24px; border-collapse: collapse;">
@@ -225,7 +229,11 @@
     </table>
 
     <div class="footer">
-        {{ $tenant->mentions_legales ?? 'Merci de votre confiance.' }}<br>
+        @if ($estProforma)
+            Facture proforma établie à titre indicatif — elle ne constitue pas une facture définitive et n'a aucune valeur de paiement. Prix valables 30 jours, sous réserve de disponibilité du stock.<br>
+        @else
+            {{ $tenant->mentions_legales ?? 'Merci de votre confiance.' }}<br>
+        @endif
         {{ $tenant->nom }} @if($tenant->ninea) — NINEA {{ $tenant->ninea }} @endif
     </div>
 

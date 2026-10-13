@@ -14,7 +14,7 @@
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased">
 <div class="min-h-screen flex" x-data="{ mobileMenuOpen: false }">
-
+ 
     {{-- Fond assombri derrière le menu mobile --}}
     <div x-show="mobileMenuOpen" x-transition.opacity x-on:click="mobileMenuOpen = false"
          class="fixed inset-0 bg-black/50 z-40 lg:hidden" style="display: none;"></div>

@@ -17,6 +17,12 @@
                    class="field pl-9">
         </div>
 
+        <select wire:model.live="filterType" class="field sm:w-44">
+            <option value="">Factures et proformas</option>
+            <option value="facture">Factures</option>
+            <option value="proforma">Proformas</option>
+        </select>
+
         <select wire:model.live="filterStatut" class="field sm:w-48">
             <option value="">Tous les statuts</option>
             <option value="payee">Payée</option>
@@ -34,7 +40,7 @@
         </select>
     </div>
 
-    @if ($search || $filterStatut || $filterPeriode)
+    @if ($search || $filterStatut || $filterPeriode || $filterType)
         <button wire:click="resetFilters" class="text-sm text-slate-500 hover:text-red-600 underline">Réinitialiser les filtres</button>
     @endif
 
@@ -47,17 +53,23 @@
                     'annulee' => 'bg-red-50 text-red-700',
                     default => 'bg-slate-100 text-slate-500',
                 };
+                $estProforma = $f->type_doc === 'devis';
+                $peutAgir = $f->statut !== 'annulee' && (auth()->user()->hasFullAccess() || $f->utilisateur_id === auth()->id());
                 $labels = ['payee' => 'Payée', 'partiel' => 'Partiellement payée', 'annulee' => 'Annulée', 'brouillon' => 'Brouillon', 'envoyee' => 'Envoyée'];
             @endphp
             <div wire:key="fact-{{ $f->id }}" class="card p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4">
-                <span class="w-12 h-12 rounded-xl bg-slate-100 text-ink-950 flex items-center justify-center shrink-0">
+                <span class="w-12 h-12 rounded-xl {{ $estProforma ? 'bg-brand-50 text-brand-700' : 'bg-slate-100 text-ink-950' }} flex items-center justify-center shrink-0">
                     <x-icon name="receipt" class="w-5 h-5" />
                 </span>
 
                 <div class="min-w-0 flex-1">
                     <div class="flex items-center gap-2 flex-wrap">
                         <p class="font-display font-semibold text-ink-950">{{ $f->num_facture }}</p>
-                        <span class="badge {{ $badge }}">{{ $labels[$f->statut] ?? $f->statut }}</span>
+                        @if ($estProforma)
+                            <span class="badge bg-brand-50 text-brand-700">Proforma</span>
+                        @else
+                            <span class="badge {{ $badge }}">{{ $labels[$f->statut] ?? $f->statut }}</span>
+                        @endif
                     </div>
                     <div class="flex items-center gap-4 mt-1 text-sm text-slate-500 flex-wrap">
                         <span class="flex items-center gap-1.5"><x-icon name="calendar" class="w-3.5 h-3.5" /> {{ $f->date_facture->translatedFormat('d F Y') }}</span>
@@ -72,12 +84,18 @@
                 <div class="flex items-center gap-4 sm:gap-5 shrink-0 sm:ml-auto">
                     <div class="text-right">
                         <p class="font-display font-bold text-lg text-ink-950">{{ number_format($f->montant_ttc, 0, ',', ' ') }} F CFA</p>
-                        @if ($f->statut === 'partiel')
+                        @if (! $estProforma && $f->statut === 'partiel')
                             <p class="text-xs text-amber-600">Payé : {{ number_format($f->montant_paye, 0, ',', ' ') }} F · Reste : {{ number_format($f->resteAPayer(), 0, ',', ' ') }} F</p>
                         @endif
                     </div>
                     <div class="flex items-center gap-1 text-slate-400">
-                        @if ($f->statut !== 'annulee' && (auth()->user()->hasFullAccess() || $f->utilisateur_id === auth()->id()))
+                        @if ($estProforma && $peutAgir)
+                            <button type="button" wire:click="openConvert({{ $f->id }})" title="Convertir en facture"
+                                    class="h-8 px-2.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold bg-brand-50 text-brand-700 hover:bg-brand-100 transition">
+                                <x-icon name="receipt" class="w-4 h-4" /> <span class="hidden sm:inline">Facturer</span>
+                            </button>
+                        @endif
+                        @if ($peutAgir)
                             <button type="button" wire:click="openEdit({{ $f->id }})" title="Modifier" class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 hover:text-ink-950 transition">
                                 <x-icon name="pencil" class="w-[18px] h-[18px]" />
                             </button>
@@ -85,17 +103,15 @@
                         <a href="{{ route('factures.pdf', $f) }}" target="_blank" title="Voir le PDF" class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 hover:text-ink-950 transition">
                             <x-icon name="eye" class="w-[18px] h-[18px]" />
                         </a>
-                        <a href="{{ route('factures.pdf', $f) }}?download=1" title="Télécharger la facture" class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 hover:text-ink-950 transition">
+                        <a href="{{ route('factures.pdf', $f) }}?download=1" title="Télécharger le PDF" class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 hover:text-ink-950 transition">
                             <x-icon name="download" class="w-[18px] h-[18px]" />
                         </a>
-                        <a href="{{ route('factures.bon-livraison', $f) }}" target="_blank" title="Bon de livraison" class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 hover:text-ink-950 transition">
-                            <x-icon name="truck" class="w-[18px] h-[18px]" />
-                        </a>
-                        <button type="button" title="Partager"
-                                onclick="navigator.share ? navigator.share({title: '{{ $f->num_facture }}', url: '{{ route('factures.pdf', $f) }}'}) : (navigator.clipboard.writeText('{{ route('factures.pdf', $f) }}'), alert('Lien copié !'))"
-                                class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 hover:text-ink-950 transition">
-                            <x-icon name="share" class="w-[18px] h-[18px]" />
-                        </button>
+                        @unless ($estProforma)
+                            <a href="{{ route('factures.bon-livraison', $f) }}" target="_blank" title="Bon de livraison" class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 hover:text-ink-950 transition">
+                                <x-icon name="truck" class="w-[18px] h-[18px]" />
+                            </a>
+                        @endunless
+                        <x-share-pdf :url="route('factures.pdf', $f)" :filename="$f->num_facture . '.pdf'" title="Partager le PDF" />
                     </div>
                 </div>
             </div>
@@ -117,7 +133,7 @@
             <div class="bg-white rounded-2xl shadow-2xl modal-enter w-full max-w-2xl max-h-[92vh] overflow-y-auto">
                 <div class="flex items-start justify-between p-6 pb-0">
                     <div>
-                        <h3 class="font-display font-bold text-xl text-ink-950">Modifier la facture</h3>
+                        <h3 class="font-display font-bold text-xl text-ink-950">{{ $editEstProforma ? 'Modifier la proforma' : 'Modifier la facture' }}</h3>
                         <p class="text-sm text-slate-500 mt-0.5">Corrige une erreur de quantité, de prix ou de client.</p>
                     </div>
                     <button type="button" wire:click="$set('showEditModal', false)" class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-ink-950 transition shrink-0">
@@ -161,11 +177,13 @@
                                 <input type="date" wire:model="editDate" class="field">
                                 @error('editDate') <span class="text-red-600 text-xs">{{ $message }}</span> @enderror
                             </div>
+                            @unless ($editEstProforma)
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-1">Montant payé (F)</label>
                                 <input type="number" step="0.01" wire:model="editMontantPaye" class="field">
                                 @error('editMontantPaye') <span class="text-red-600 text-xs">{{ $message }}</span> @enderror
                             </div>
+                            @endunless
                         </div>
 
                         <div>
@@ -259,7 +277,7 @@
                         @else
                             <div class="text-center py-10 text-slate-400">
                                 <p class="text-4xl mb-2">📦</p>
-                                <p class="text-sm">Aucun produit dans cette facture</p>
+                                <p class="text-sm">Aucun produit dans ce document</p>
                             </div>
                         @endif
                     </div>
@@ -270,6 +288,41 @@
                             <x-icon name="save" class="w-4 h-4" /> Enregistrer les modifications
                         </button>
                     </div>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    {{-- Conversion proforma -> facture --}}
+    @if ($convertFactureId)
+        <div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 backdrop-enter" wire:click.self="cancelConvert">
+            <div class="bg-white rounded-2xl shadow-2xl modal-enter w-full max-w-md p-6">
+                <div class="w-12 h-12 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center mb-4">
+                    <x-icon name="receipt" class="w-6 h-6" />
+                </div>
+                <h3 class="font-display font-bold text-xl text-ink-950">Convertir en facture ?</h3>
+                <p class="text-sm text-slate-500 mt-1">La proforma devient une vraie facture (numéro <strong>FA-…</strong>) et les produits sont sortis du stock. Cette action est définitive.</p>
+
+                @php $convFacture = $factures->firstWhere('id', $convertFactureId); @endphp
+                <div class="grid grid-cols-2 gap-2 mt-5">
+                    <button type="button" wire:click="$set('convertPaiement', 'paye')"
+                            class="p-2.5 rounded-lg border-2 text-sm font-medium text-center transition
+                                   {{ $convertPaiement === 'paye' ? 'border-ink-950 bg-ink-950 text-white' : 'border-slate-200 text-slate-600 hover:border-slate-300' }}">
+                        Payée
+                    </button>
+                    <button type="button" wire:click="$set('convertPaiement', 'credit')" @disabled(! $convFacture?->client_id)
+                            class="p-2.5 rounded-lg border-2 text-sm font-medium text-center transition disabled:opacity-40 disabled:cursor-not-allowed
+                                   {{ $convertPaiement === 'credit' ? 'border-ink-950 bg-ink-950 text-white' : 'border-slate-200 text-slate-600 hover:border-slate-300' }}">
+                        À crédit
+                    </button>
+                </div>
+                @if (! $convFacture?->client_id)
+                    <p class="text-xs text-slate-400 mt-2">Le crédit nécessite un client enregistré sur la proforma.</p>
+                @endif
+
+                <div class="flex justify-end gap-2 mt-6">
+                    <button type="button" wire:click="cancelConvert" class="btn-secondary">Annuler</button>
+                    <button type="button" wire:click="convertir" wire:loading.attr="disabled" class="btn-primary">Convertir en facture</button>
                 </div>
             </div>
         </div>

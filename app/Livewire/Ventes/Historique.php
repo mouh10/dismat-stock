@@ -9,6 +9,7 @@ use App\Models\Facture;
 use App\Models\FactureItem;
 use App\Models\Produit;
 use App\Services\StockService;
+use App\Support\DocNumber;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -24,6 +25,12 @@ class Historique extends Component
     public string $filterStatut = '';
     #[Url(as: 'periode')]
     public string $filterPeriode = '';
+    #[Url(as: 'type')]
+    public string $filterType = ''; // '' = tout, 'facture', 'proforma'
+
+    // --- Conversion proforma -> facture ---
+    public ?int $convertFactureId = null;
+    public string $convertPaiement = 'paye'; // 'paye' ou 'credit'
 
     // --- Modale de modification ---
     public bool $showEditModal = false;
@@ -35,6 +42,7 @@ class Historique extends Component
     public string $editNotes = '';
     public bool $editInclureTva = false;
     public float $editMontantPaye = 0;
+    public bool $editEstProforma = false;
     public array $editLignes = []; // [['product_id','designation','qte','prix_unitaire','total_ht']]
 
     // Recherche produit pour ajouter une ligne dans la modale
@@ -47,10 +55,11 @@ class Historique extends Component
     public function updatingSearch() { $this->resetPage(); }
     public function updatingFilterStatut() { $this->resetPage(); }
     public function updatingFilterPeriode() { $this->resetPage(); }
+    public function updatingFilterType() { $this->resetPage(); }
 
     public function resetFilters()
     {
-        $this->reset(['search', 'filterStatut', 'filterPeriode']);
+        $this->reset(['search', 'filterStatut', 'filterPeriode', 'filterType']);
         $this->resetPage();
     }
 
@@ -90,6 +99,7 @@ class Historique extends Component
         $this->editNotes = (string) $facture->notes;
         $this->editInclureTva = (float) $facture->taux_tva > 0;
         $this->editMontantPaye = (float) $facture->montant_paye;
+        $this->editEstProforma = $facture->type_doc === 'devis';
 
         $this->editLignes = $facture->items->map(fn ($item) => [
             'product_id' => $item->product_id,
@@ -186,9 +196,11 @@ class Historique extends Component
             return;
         }
 
+        $estProforma = $facture->type_doc === 'devis';
+
         $this->validate([
             'editDate' => 'required|date',
-            'editMontantPaye' => 'required|numeric|min:0',
+            'editMontantPaye' => $estProforma ? 'nullable|numeric|min:0' : 'required|numeric|min:0',
         ]);
 
         if (empty($this->editLignes)) {
@@ -200,10 +212,10 @@ class Historique extends Component
         $tva = $this->editTvaMontant;
         $total = $this->editTotal;
         $tauxTva = $this->editInclureTva ? (float) (auth()->user()->tenant->tva_defaut ?? 18) : 0;
-        $montantPaye = min($this->editMontantPaye, $total);
+        $montantPaye = $estProforma ? 0.0 : min($this->editMontantPaye, $total);
 
         try {
-            DB::transaction(function () use ($facture, $stockService, $sousTotal, $tva, $tauxTva, $total, $montantPaye) {
+            DB::transaction(function () use ($facture, $stockService, $sousTotal, $tva, $tauxTva, $total, $montantPaye, $estProforma) {
                 // Capturé AVANT toute modification : nécessaire pour recalculer correctement
                 // le delta de créance plus bas (après update(), l'original serait déjà écrasé).
                 $ancienMontantTtc = (float) $facture->montant_ttc;
@@ -221,7 +233,8 @@ class Historique extends Component
 
                 foreach ($produitIds as $produitId) {
                     $produit = Produit::find($produitId);
-                    if (! $produit || ! $produit->est_stockable) {
+                    // Une proforma n'a jamais touché au stock : rien à réajuster.
+                    if ($estProforma || ! $produit || ! $produit->est_stockable) {
                         continue;
                     }
 
@@ -252,7 +265,7 @@ class Historique extends Component
                 }
 
                 // 3) Recalcule le statut et met à jour la facture.
-                $statut = $montantPaye >= $total ? 'payee' : ($montantPaye > 0 ? 'partiel' : 'brouillon');
+                $statut = $estProforma ? 'brouillon' : ($montantPaye >= $total ? 'payee' : ($montantPaye > 0 ? 'partiel' : 'brouillon'));
 
                 $facture->update([
                     'client_id' => $this->editClientId,
@@ -265,6 +278,10 @@ class Historique extends Component
                     'montant_paye' => $montantPaye,
                     'statut' => $statut,
                 ]);
+
+                if ($estProforma) {
+                    return; // pas de créance ni de solde client pour une proforma
+                }
 
                 // 4) Réajuste la créance client et son solde en fonction du nouveau "reste à payer".
                 $ancienReste = max(0, $ancienMontantTtc - $ancienMontantPaye);
@@ -303,8 +320,94 @@ class Historique extends Component
             return;
         }
 
-        session()->flash('success', 'Facture modifiée avec succès.');
+        session()->flash('success', $estProforma ? 'Proforma modifiée avec succès.' : 'Facture modifiée avec succès.');
         $this->showEditModal = false;
+    }
+
+    // ------------------------------------------------------------------
+    //  Proforma -> facture
+    // ------------------------------------------------------------------
+
+    public function openConvert(int $factureId)
+    {
+        $facture = Facture::findOrFail($factureId);
+
+        if ($facture->type_doc !== 'devis' || ! $this->peutModifier($facture)) {
+            session()->flash('error', 'Cette proforma ne peut pas être convertie.');
+            return;
+        }
+
+        $this->convertFactureId = $facture->id;
+        $this->convertPaiement = 'paye';
+    }
+
+    public function cancelConvert()
+    {
+        $this->reset(['convertFactureId']);
+        $this->convertPaiement = 'paye';
+    }
+
+    /**
+     * Transforme la proforma en vraie facture : nouveau numéro FA-…, sortie de stock
+     * (bloquée si le stock a baissé depuis), et paiement enregistré ou créance ouverte.
+     */
+    public function convertir(StockService $stockService)
+    {
+        $facture = Facture::with('items')->find($this->convertFactureId);
+
+        if (! $facture || $facture->type_doc !== 'devis' || ! $this->peutModifier($facture)) {
+            session()->flash('error', 'Action non autorisée.');
+            $this->cancelConvert();
+            return;
+        }
+
+        $aCredit = $this->convertPaiement === 'credit' && $facture->client_id;
+        $total = (float) $facture->montant_ttc;
+        $ancienNum = $facture->num_facture;
+        $nouveauNum = '';
+
+        try {
+            DB::transaction(function () use ($facture, $stockService, $aCredit, $total, $ancienNum, &$nouveauNum) {
+                $nouveauNum = DocNumber::next('FA');
+
+                // Sortie de stock, comme une vente normale.
+                foreach ($facture->items as $item) {
+                    $produit = $item->product_id ? Produit::find($item->product_id) : null;
+
+                    if ($produit && $produit->est_stockable) {
+                        $stockService->sortie($produit, $facture->magasin_id, (float) $item->qte, 'Vente ' . $nouveauNum, $nouveauNum);
+                    }
+                }
+
+                $facture->update([
+                    'type_doc' => 'facture',
+                    'num_facture' => $nouveauNum,
+                    'date_facture' => today(),
+                    'montant_paye' => $aCredit ? 0 : $total,
+                    'statut' => $aCredit ? 'brouillon' : 'payee',
+                    'notes' => trim(($facture->notes ? $facture->notes . "\n" : '') . 'Issue de la proforma ' . $ancienNum),
+                ]);
+
+                if ($aCredit && $total > 0) {
+                    Creance::create([
+                        'client_id' => $facture->client_id,
+                        'facture_id' => $facture->id,
+                        'montant_initial' => $total,
+                        'montant_restant' => $total,
+                        'montant_acompte' => 0,
+                        'statut' => 'en_cours',
+                    ]);
+                    Client::where('id', $facture->client_id)->increment('solde_creance', $total);
+                }
+            });
+        } catch (InsufficientStockException $e) {
+            session()->flash('error', $e->getMessage() . ' La proforma reste inchangée : réapprovisionne ou modifie-la, puis réessaie.');
+            $this->cancelConvert();
+            return;
+        }
+
+        $this->cancelConvert();
+        session()->flash('success', "Proforma {$ancienNum} convertie en facture {$nouveauNum}. Le stock a été mis à jour.");
     }
 
     public function render()
@@ -317,10 +420,13 @@ class Historique extends Component
                 $q2->where('num_facture', 'ilike', "%{$this->search}%")
                    ->orWhereHas('client', fn ($q3) => $q3->where('nom', 'ilike', "%{$this->search}%"));
             }))
+            ->when($this->filterType === 'proforma', fn ($q) => $q->where('type_doc', 'devis'))
+            ->when($this->filterType === 'facture', fn ($q) => $q->where('type_doc', '!=', 'devis'))
             ->when($this->filterStatut, fn ($q) => $q->where('statut', $this->filterStatut))
             ->when($debut, fn ($q) => $q->whereDate('date_facture', '>=', $debut));
 
-        $totalPeriode = (clone $query)->sum('montant_ttc');
+        // Le chiffre d'affaires ne compte jamais les proformas (ce ne sont pas des ventes).
+        $totalPeriode = (clone $query)->where('type_doc', '!=', 'devis')->sum('montant_ttc');
 
         $factures = $query->latest('date_facture')->latest('id')->paginate(10);
 
@@ -337,7 +443,7 @@ class Historique extends Component
             ->limit(8)
             ->get();
 
-        $subtitle = "{$factures->total()} vente(s) - <span class='font-semibold text-ink-950'>" . number_format($totalPeriode, 0, ',', ' ') . ' F CFA</span>';
+        $subtitle = "{$factures->total()} document(s) - <span class='font-semibold text-ink-950'>" . number_format($totalPeriode, 0, ',', ' ') . ' F CFA</span>';
         if (! auth()->user()->hasFullAccess()) {
             $subtitle .= " <span class='text-slate-400'>(mes ventes uniquement)</span>";
         }

@@ -27,21 +27,21 @@ class Dashboard extends Component
     {
         $mesVentes = ! auth()->user()->hasFullAccess();
 
-        $ventesJour = (float) Facture::whereDate('date_facture', today())
+        $ventesJour = (float) Facture::where('type_doc', '!=', 'devis')->whereDate('date_facture', today())
             ->when($mesVentes, fn ($q) => $q->where('utilisateur_id', auth()->id()))
             ->sum('montant_ttc');
-        $ventesHier = (float) Facture::whereDate('date_facture', today()->subDay())
+        $ventesHier = (float) Facture::where('type_doc', '!=', 'devis')->whereDate('date_facture', today()->subDay())
             ->when($mesVentes, fn ($q) => $q->where('utilisateur_id', auth()->id()))
             ->sum('montant_ttc');
-        $nbFacturesJour = Facture::whereDate('date_facture', today())
+        $nbFacturesJour = Facture::where('type_doc', '!=', 'devis')->whereDate('date_facture', today())
             ->when($mesVentes, fn ($q) => $q->where('utilisateur_id', auth()->id()))
             ->count();
 
-        $ventesMois = (float) Facture::whereMonth('date_facture', now()->month)
+        $ventesMois = (float) Facture::where('type_doc', '!=', 'devis')->whereMonth('date_facture', now()->month)
             ->whereYear('date_facture', now()->year)
             ->when($mesVentes, fn ($q) => $q->where('utilisateur_id', auth()->id()))
             ->sum('montant_ttc');
-        $ventesMoisDernier = (float) Facture::whereMonth('date_facture', now()->subMonthNoOverflow()->month)
+        $ventesMoisDernier = (float) Facture::where('type_doc', '!=', 'devis')->whereMonth('date_facture', now()->subMonthNoOverflow()->month)
             ->whereYear('date_facture', now()->subMonthNoOverflow()->year)
             ->when($mesVentes, fn ($q) => $q->where('utilisateur_id', auth()->id()))
             ->sum('montant_ttc');
@@ -54,7 +54,7 @@ class Dashboard extends Component
         $nbClients = Client::count();
 
         $debutPeriode = today()->subDays(6);
-        $ventesParJour = Facture::selectRaw('date_facture, SUM(montant_ttc) as total')
+        $ventesParJour = Facture::where('type_doc', '!=', 'devis')->selectRaw('date_facture, SUM(montant_ttc) as total')
             ->where('date_facture', '>=', $debutPeriode)
             ->when($mesVentes, fn ($q) => $q->where('utilisateur_id', auth()->id()))
             ->groupBy('date_facture')
@@ -70,6 +70,7 @@ class Dashboard extends Component
 
         $topProduits = FactureItem::query()
             ->join('factures', 'factures.id', '=', 'facture_items.facture_id')
+            ->where('factures.type_doc', '!=', 'devis')
             ->whereMonth('factures.date_facture', now()->month)
             ->whereYear('factures.date_facture', now()->year)
             ->when($mesVentes, fn ($q) => $q->where('factures.utilisateur_id', auth()->id()))
@@ -94,12 +95,13 @@ class Dashboard extends Component
 
         $margeJour = (float) FactureItem::join('factures', 'factures.id', '=', 'facture_items.facture_id')
             ->join('produits', 'produits.id', '=', 'facture_items.product_id')
+            ->where('factures.type_doc', '!=', 'devis')
             ->whereDate('factures.date_facture', today())
             ->when($mesVentes, fn ($q) => $q->where('factures.utilisateur_id', auth()->id()))
             ->selectRaw('COALESCE(SUM(facture_items.total_ht - (produits.prix_achat * facture_items.qte)), 0) as marge')
             ->value('marge');
 
-        $derniereVente = Facture::when($mesVentes, fn ($q) => $q->where('utilisateur_id', auth()->id()))
+        $derniereVente = Facture::where('type_doc', '!=', 'devis')->when($mesVentes, fn ($q) => $q->where('utilisateur_id', auth()->id()))
             ->latest('created_at')
             ->first();
 
