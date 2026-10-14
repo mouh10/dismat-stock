@@ -13,6 +13,8 @@
                     </a>
                     @unless ($lastEstProforma)
                         <a href="{{ route('factures.bon-livraison', $lastFactureId) }}" target="_blank" class="text-brand-700 font-medium hover:underline">Bon de livraison</a>
+                        <x-share-pdf :url="route('factures.bon-livraison', $lastFactureId)" :filename="'BL-' . $lastDocNum . '.pdf'" label="Partager le BL"
+                                     class="!w-auto h-8 px-2.5 !text-brand-700 font-medium hover:!bg-emerald-100" />
                     @endunless
                     <x-share-pdf :url="route('factures.pdf', $lastFactureId)" :filename="$lastDocNum . '.pdf'" label="Partager le PDF"
                                  class="!w-auto h-8 px-2.5 !text-brand-700 font-medium hover:!bg-emerald-100" />

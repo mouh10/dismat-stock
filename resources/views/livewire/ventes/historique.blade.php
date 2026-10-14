@@ -110,8 +110,12 @@
                             <a href="{{ route('factures.bon-livraison', $f) }}" target="_blank" title="Bon de livraison" class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 hover:text-ink-950 transition">
                                 <x-icon name="truck" class="w-[18px] h-[18px]" />
                             </a>
+                            <a href="{{ route('factures.bon-livraison', $f) }}?download=1" title="Télécharger le bon de livraison" class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 hover:text-ink-950 transition">
+                                <x-icon name="download" class="w-[18px] h-[18px]" />
+                            </a>
+                            <x-share-pdf :url="route('factures.bon-livraison', $f)" :filename="'BL-' . $f->num_facture . '.pdf'" title="Partager le bon de livraison" />
                         @endunless
-                        <x-share-pdf :url="route('factures.pdf', $f)" :filename="$f->num_facture . '.pdf'" title="Partager le PDF" />
+                        <x-share-pdf :url="route('factures.pdf', $f)" :filename="$f->num_facture . '.pdf'" title="Partager la facture (PDF)" />
                     </div>
                 </div>
             </div>
