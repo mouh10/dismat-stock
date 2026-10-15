@@ -70,42 +70,6 @@
         </div>
     </div>
 
-    {{-- Graphique + Top produits --}}
-    <div class="grid gap-6 lg:grid-cols-2">
-        <div class="card p-5">
-            <h3 class="font-display font-semibold text-ink-950">Évolution des ventes</h3>
-            <p class="text-sm text-slate-500 mb-4">7 derniers jours (factures payées)</p>
-            <div style="height: 280px;">
-                <canvas id="salesChart"></canvas>
-            </div>
-        </div>
-
-        <div class="card p-5">
-            <h3 class="font-display font-semibold text-ink-950">Top produits</h3>
-            <p class="text-sm text-slate-500 mb-4">Les plus vendus ce mois (par revenu)</p>
-
-            @forelse ($topProduits as $index => $p)
-                <div class="flex items-center justify-between gap-3 py-2.5 {{ ! $loop->last ? 'border-b border-slate-100' : '' }}">
-                    <div class="flex items-center gap-3 min-w-0">
-                        <span class="flex h-8 w-8 items-center justify-center rounded-full bg-brand-50 text-xs font-bold text-brand-700 shrink-0">
-                            {{ $index + 1 }}
-                        </span>
-                        <div class="min-w-0">
-                            <p class="font-medium text-sm text-ink-950 truncate">{{ $p->designation }}</p>
-                            <p class="text-xs text-slate-400">{{ (int) $p->total_vendu }} vendus</p>
-                        </div>
-                    </div>
-                    <p class="font-semibold text-sm text-ink-950 shrink-0">{{ number_format($p->revenue, 0, ',', ' ') }} F</p>
-                </div>
-            @empty
-                <div class="text-center py-12 text-slate-400">
-                    <p class="text-3xl mb-2">📦</p>
-                    <p class="text-sm">Aucune vente enregistrée ce mois</p>
-                </div>
-            @endforelse
-        </div>
-    </div>
-
     {{-- Alertes stock / Actions rapides / Résumé --}}
     <div class="grid gap-6 lg:grid-cols-3">
         <div class="card p-5">
@@ -183,40 +147,4 @@
             </div>
         </div>
     </div>
-
-    <script>
-        (function () {
-            function renderSalesChart() {
-                const ctx = document.getElementById('salesChart');
-                if (!ctx || typeof Chart === 'undefined') return;
-                if (ctx._chartInstance) { ctx._chartInstance.destroy(); }
-                ctx._chartInstance = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: @json($chartLabels),
-                        datasets: [{
-                            label: 'Ventes (F CFA)',
-                            data: @json($chartData),
-                            borderColor: '#0EA5EA',
-                            backgroundColor: 'rgba(14, 165, 234, 0.12)',
-                            borderWidth: 2,
-                            tension: 0.35,
-                            fill: true,
-                            pointRadius: 3,
-                            pointBackgroundColor: '#0EA5EA',
-                        }],
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
-                        scales: {
-                            y: { beginAtZero: true, ticks: { callback: (v) => new Intl.NumberFormat('fr-FR').format(v) } },
-                        },
-                    },
-                });
-            }
-            renderSalesChart();
-        })();
-    </script>
 </div>

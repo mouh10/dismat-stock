@@ -14,7 +14,7 @@
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased">
 <div class="min-h-screen flex" x-data="{ mobileMenuOpen: false }">
- 
+
     {{-- Fond assombri derrière le menu mobile --}}
     <div x-show="mobileMenuOpen" x-transition.opacity x-on:click="mobileMenuOpen = false"
          class="fixed inset-0 bg-black/50 z-40 lg:hidden" style="display: none;"></div>
@@ -24,11 +24,9 @@
            :class="mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
            class="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 transform transition-transform duration-200 ease-in-out lg:static lg:translate-x-0">
         <div class="h-16 flex items-center gap-3 px-5 border-b border-slate-100">
-            <x-brand-icon />
-            <div class="min-w-0 flex-1">
-                <p class="font-display font-bold text-lg text-ink-950 leading-tight truncate">DISMAT</p>
-                <p class="text-xs text-slate-400 truncate">{{ auth()->user()->tenant?->nom }}</p>
-            </div>
+            <a href="{{ route('dashboard') }}" class="min-w-0 flex-1 flex items-center">
+                <img src="{{ asset('images/logo-dismat.jpg') }}" alt="DISMAT" class="h-9 w-auto max-w-full">
+            </a>
             <button type="button" x-on:click="mobileMenuOpen = false" class="lg:hidden w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 shrink-0">
                 <x-icon name="x" class="w-5 h-5" />
             </button>
@@ -152,6 +150,10 @@
                     </button>
                     <div x-show="open" x-transition style="display: none;"
                          class="absolute right-0 mt-2 w-52 bg-white rounded-xl border border-slate-200 shadow-lg py-1.5 z-50">
+                        <div class="px-3 py-2 border-b border-slate-100">
+                            <p class="text-sm font-medium text-ink-950 truncate">{{ $user->email }}</p>
+                            <span class="inline-block mt-1 px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 text-xs font-medium capitalize">{{ $user->role }}</span>
+                        </div>
                         @if ($user->hasRole('admin'))
                             <a href="{{ route('parametres.index') }}" class="block px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">Paramètres</a>
                         @endif
